@@ -7,18 +7,21 @@
   },
   "route": {
     "id": "string",
-    "targets": "Speaker[] | SpeakerGroup",
+    "targets": "Speaker[] | SpeakerSet[]",
     "signalChain": "SignalChain"
   },
   "operations": [
     "addRoute",
     "removeRoute",
     "assignSpeaker",
+    "assignSpeakerSet",
     "unassignSpeaker",
+    "unassignSpeakerSet",
     "setSignalChain"
   ],
   "rules": [
     "crossover is routing plus signal chains, not a special acoustic solver",
-    "different speakers may use different crossover points, delays, gains and polarity"
+    "different speakers or sets may use different crossover points, delays, gains and polarity",
+    "routing a SpeakerSet applies the route to its member Speaker instances while preserving member identity"
   ]
 }
