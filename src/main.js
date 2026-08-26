@@ -1,5 +1,5 @@
 import { Scene, Box, PerspectiveCamera, Viewport, OrbitControls, PlaneDragController } from '../vendor/S3D/s3d.js';
-import { FrequencyRangeController, SampledFieldPlane, SpeakerNode } from '../vendor/S3D/domains/acoustics/index.js';
+import { FrequencyRangeController, OrthogonalFieldSlices, SampledFieldPlane, SpeakerNode } from '../vendor/S3D/domains/acoustics/index.js';
 import { WebGUI } from '../vendor/WebGUI/webgui.js';
 import { RectangularRoomField } from './rectangular-room-field.js';
 import { Speaker } from './speaker.js';
@@ -36,13 +36,38 @@ const roomField = new RectangularRoomField({
   maxFrequency: frequency.maxHz,
 });
 
-const fieldView = scene.add(new SampledFieldPlane({
-  id: 'live-field',
+const field2DView = scene.add(new SampledFieldPlane({
+  id: 'live-field-2d',
   field: roomField,
   bounds: { min: [0, .035, 0], max: [dimensions.width, .035, dimensions.depth] },
   resolution: [42, 32],
   height: .018,
 }));
+
+const field3DView = scene.add(new OrthogonalFieldSlices({
+  id: 'live-field-3d',
+  field: roomField,
+  bounds: { min: [0, 0, 0], max: [dimensions.width, dimensions.height, dimensions.depth] },
+  slices: { x: dimensions.width / 2, y: dimensions.height / 2, z: dimensions.depth / 2 },
+  resolution: { xz: [32, 24], xy: [32, 16], yz: [24, 16] },
+  thickness: .018,
+}));
+field3DView.visible = false;
+field3DView.dirty = false;
+let fieldViewMode = '2d';
+
+function activeFieldViews() {
+  if (fieldViewMode === 'both') return [field2DView, field3DView];
+  return fieldViewMode === '3d' ? [field3DView] : [field2DView];
+}
+
+function setFieldViewMode(mode) {
+  if (!['2d', '3d', 'both'].includes(mode)) throw new Error(`Unknown field view mode: ${mode}`);
+  fieldViewMode = mode;
+  field2DView.visible = mode !== '3d';
+  field3DView.visible = mode !== '2d';
+  for (const view of activeFieldViews()) view.invalidate();
+}
 
 const camera = new PerspectiveCamera({
   position: [8.5, 7.2, 9],
@@ -52,7 +77,12 @@ const camera = new PerspectiveCamera({
 });
 const viewport = new Viewport(canvas, { camera }).start(scene);
 const orbit = new OrbitControls(canvas, camera);
-const drag = new PlaneDragController(canvas, camera, { candidates: () => speakerNodes, planeY: .22 });
+const drag = new PlaneDragController(canvas, camera, {
+  candidates: () => speakerNodes,
+  planeY: .22,
+  minY: .22,
+  maxY: dimensions.height - .22,
+});
 
 const frequencyValue = gui.h('output', { text: `${frequency.selectedHz.toFixed(1)} Hz` });
 const frequencySlider = gui.input({
@@ -61,9 +91,38 @@ const frequencySlider = gui.input({
 });
 const speakerList = gui.stack([], { className: 'speaker-list' });
 
+function sliceControl(label, axis, value, max) {
+  const output = gui.h('output', { text: `${value.toFixed(2)} m` });
+  const input = gui.input({
+    type: 'range', min: 0, max, step: .01, value,
+    on: { input: event => {
+      const next = Number(event.target.value);
+      output.textContent = `${next.toFixed(2)} m`;
+      field3DView.setSlice(axis, next);
+    } },
+  });
+  return gui.field(label, gui.stack([input, output]), { className: 'slice-control' });
+}
+
+const sliceControls = gui.h('details', { className: 'slice-controls' }, [
+  gui.h('summary', { text: '3D field slices' }),
+  sliceControl('Cross-room X', 'x', dimensions.width / 2, dimensions.width),
+  sliceControl('Height Y', 'y', dimensions.height / 2, dimensions.height),
+  sliceControl('Longitudinal Z', 'z', dimensions.depth / 2, dimensions.depth),
+]);
+
+const fieldViewSelector = gui.field('Field view', gui.select({
+  value: fieldViewMode,
+  on: { change: event => setFieldViewMode(event.target.value) },
+}, [
+  gui.option('2d', '2D heatmap'),
+  gui.option('3d', '3D slices'),
+  gui.option('both', '2D + 3D'),
+]));
+
 function invalidateField() {
   roomField.invalidate();
-  fieldView.invalidate();
+  for (const view of activeFieldViews()) view.invalidate();
 }
 
 function numberControl(label, value, { min, max, step = .1, update }) {
@@ -185,14 +244,16 @@ function addSpeaker(position = null) {
 frequency.on('selectedFrequencyChanged', state => {
   frequencyValue.textContent = `${state.selectedHz.toFixed(1)} Hz`;
   roomField.setFrequency(state.selectedHz);
-  fieldView.invalidate();
+  for (const view of activeFieldViews()) view.invalidate();
 });
 
 gui.mount(sidebar, [
   gui.h('header', {}, [gui.h('h1', { text: 'AcousticMate' }), gui.h('p', { text: 'Live room-mode field' })]),
   gui.field('Frequency', gui.stack([frequencySlider, frequencyValue])),
+  fieldViewSelector,
+  sliceControls,
   gui.button('Add speaker', { on: { click: () => addSpeaker() } }),
-  gui.h('p', { className: 'hint', text: 'Drag speakers with LMB. Orbit with RMB. Zoom with the wheel.' }),
+  gui.h('p', { className: 'hint', text: 'LMB moves speakers on XZ. Shift+LMB changes height. RMB orbits. Wheel zooms.' }),
   speakerList,
 ]);
 

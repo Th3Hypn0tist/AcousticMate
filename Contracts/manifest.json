@@ -1,6 +1,6 @@
 {
   "package": "acousticmate-contracts",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "files": [
     "00-project-contract.json",
     "01-image-reference-layer.json",

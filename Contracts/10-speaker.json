@@ -30,11 +30,12 @@
   ],
   "interaction": {
     "view": "S3D/domains/acoustics/SpeakerNode",
-    "drag": "continuous on XZ plane in V1",
+    "drag": "continuous on XZ plane with independently controllable Y height",
     "update": "model position and dependent visualization update during pointer movement"
   },
   "rules": [
     "speaker count is unrestricted by architecture",
+    "speaker height is user-adjustable inside the room volume",
     "speaker response may contain only the frequency range relevant to the project"
   ]
 }

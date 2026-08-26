@@ -11,6 +11,24 @@
     "volume",
     "isosurface"
   ],
+  "v1ThreeDimensionalView": {
+    "implementation": "three independently positioned orthogonal slices",
+    "planes": [
+      "XZ horizontal slice at selected Y",
+      "XY longitudinal slice at selected Z",
+      "YZ cross-room slice at selected X"
+    ],
+    "colorScale": "shared across all visible slices",
+    "mustNot": "represent a single floor-level XZ slice as the complete 3D field"
+  },
+  "viewSelection": {
+    "modes": [
+      "2D heatmap",
+      "3D orthogonal slices",
+      "2D and 3D together"
+    ],
+    "invariant": "adding the 3D field view does not remove or redefine the existing 2D heatmap"
+  },
   "controls": {
     "frequency": "number | null",
     "frequencyRange": "[minHz,maxHz] | null",

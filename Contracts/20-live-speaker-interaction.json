@@ -8,6 +8,7 @@
   },
   "flow": [
     "pointer movement changes SpeakerNode position",
+    "horizontal drag changes XZ while vertical drag changes Y",
     "positionChanged updates the bound Speaker model",
     "speaker-mode coupling is invalidated",
     "combined acoustic field is invalidated",
@@ -16,6 +17,7 @@
   "invariants": [
     "speaker count is unrestricted by architecture",
     "each speaker can be moved independently like a structural node",
+    "each speaker can be lifted vertically and its Y position participates in modal coupling",
     "visual feedback continues throughout dragging",
     "drag end is not a calculation trigger or synchronization barrier",
     "multiple rapid position events collapse into at most one field rebuild per animation frame",

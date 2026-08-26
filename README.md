@@ -8,6 +8,8 @@ AcousticMate is a browser-based room-acoustics tool built from the standalone We
 - multiple independently draggable speaker nodes
 - phase-aware complex pressure summation
 - live field resampling while a speaker moves
+- selectable 2D heatmap, 3D orthogonal slices or both together
+- horizontal speaker dragging and Shift-drag vertical placement
 - per-speaker gain, delay and polarity
 - Butterworth, Linkwitz–Riley and Bessel high/low-pass filters
 - per-speaker parametric EQ
