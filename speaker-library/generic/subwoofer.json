@@ -1,0 +1,12 @@
+{
+  "id": "generic/subwoofer",
+  "manufacturer": "Generic",
+  "model": "Subwoofer",
+  "type": "subwoofer",
+  "categories": ["home", "studio", "pa", "installation"],
+  "dimensions": { "width": 0.62, "height": 0.52, "depth": 0.72 },
+  "frequencyRange": [25, 120],
+  "frequencyResponse": [[20, -12], [25, -6], [35, -2], [45, 0], [80, 0], [100, -2], [120, -6]],
+  "directivity": { "mode": "omni" },
+  "metadata": { "source": "generic-placeholder", "measured": false }
+}
