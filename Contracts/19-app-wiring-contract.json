@@ -7,7 +7,9 @@
     "instantiate AcousticMate domain modules",
     "wire events and data flow",
     "manage project state",
-    "compose application UI from WebGUI primitives"
+    "compose application UI from WebGUI primitives",
+    "load and expose SpeakerModel library data",
+    "open and commit SpeakerSet editing workflows"
   ],
   "mustNot": [
     "contain acoustic equations that belong in domain solvers",
@@ -35,13 +37,17 @@
     "add wall and cross-room measurements",
     "solve constrained geometry",
     "extrude room by height",
-    "place one or more speakers",
-    "bind every speaker model to a draggable S3D SpeakerNode instance",
-    "configure each speaker signal chain and crossover routing",
+    "choose or create SpeakerModel definitions",
+    "place one or more Speaker instances",
+    "optionally group speakers into SpeakerSet instances",
+    "edit SpeakerSet member-local positions and orientations in the dedicated SpeakerSetEditor",
+    "return to the main visualizer and manipulate complete sets through their parent transforms",
+    "bind every visible speaker/set representation to reusable S3D interaction structures",
+    "configure each speaker or set signal chain and crossover routing",
     "solve room modes",
-    "compute phase-aware combined acoustic field",
-    "invalidate and resample the visible field continuously while any speaker moves",
+    "compute phase-aware combined acoustic field including directional coupling where available",
+    "invalidate and resample the visible field continuously while any speaker or set moves",
     "select single frequency or frequency range",
-    "visualize field in 3D"
+    "visualize field in 2D, 3D or both"
   ]
 }
