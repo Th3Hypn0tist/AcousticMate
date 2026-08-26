@@ -30,6 +30,22 @@ test('moving a speaker changes the sampled field', () => {
   const field = new RectangularRoomField({ dimensions, frequency: 58, maxFrequency: 140, speakers: [speaker] });
   const before = field.sample(3.2, 1.1, 2.3);
   speaker.position = [5, .22, 3.5];
+  field.invalidate();
   const after = field.sample(3.2, 1.1, 2.3);
   assert.notEqual(after, before);
+});
+
+test('prepares speaker and room transfer coefficients once per invalidation', () => {
+  let evaluations = 0;
+  const speaker = {
+    position: [1, .22, 1],
+    enabled: true,
+    transferAt() { evaluations += 1; return [1, 0]; },
+  };
+  const field = new RectangularRoomField({ dimensions, frequency: 58, maxFrequency: 140, speakers: [speaker] });
+  for (let index = 0; index < 100; index++) field.sample(index / 20, 1.1, 2.3);
+  assert.equal(evaluations, 1);
+  field.invalidate();
+  field.sample(1, 1.1, 2.3);
+  assert.equal(evaluations, 2);
 });
