@@ -16,6 +16,23 @@
     "signalChain": "SignalChain | null",
     "enabled": "boolean"
   },
+  "operations": [
+    "setPosition",
+    "setOrientation",
+    "setEnabled",
+    "setSignalChain"
+  ],
+  "events": [
+    "positionChanged",
+    "orientationChanged",
+    "enabledChanged",
+    "signalChainChanged"
+  ],
+  "interaction": {
+    "view": "S3D/domains/acoustics/SpeakerNode",
+    "drag": "continuous on XZ plane in V1",
+    "update": "model position and dependent visualization update during pointer movement"
+  },
   "rules": [
     "speaker count is unrestricted by architecture",
     "speaker response may contain only the frequency range relevant to the project"

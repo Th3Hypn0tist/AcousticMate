@@ -1,6 +1,6 @@
 {
   "package": "acousticmate-contracts",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "files": [
     "00-project-contract.json",
     "01-image-reference-layer.json",
@@ -22,6 +22,7 @@
     "17-framework-boundaries.json",
     "18-webgui-wiring-contract.json",
     "19-app-wiring-contract.json",
+    "20-live-speaker-interaction.json",
     "README.md",
     "manifest.json"
   ],
