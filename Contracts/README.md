@@ -1,6 +1,6 @@
-# AcousticMate Contracts v0.6
+# AcousticMate Contracts v0.7
 
-AcousticMate is a browser-based JavaScript/S3D room-acoustics tool focused initially on low-frequency room modes, loudspeaker/subwoofer placement, crossover/filter configuration and 3D visualization.
+AcousticMate is a browser-based JavaScript/S3D room-acoustics tool covering low-frequency room modes, loudspeaker/subwoofer placement, crossover/filter configuration, phase-aware field calculation and 2D/3D visualization. The architecture is not restricted to home use: studio, installation and PA loudspeakers are valid first-class use cases.
 
 ## Architectural rule
 
@@ -29,34 +29,82 @@ instances + wiring + WebGUI composition
 - AcousticMate physics must not depend on the S3D renderer.
 - App may depend on WebGUI, S3D core, S3D domains and AcousticMate modules.
 - Reusable stateful components are instances, never global singletons.
-- Reusable features are modularized for later S3D use.
 
 ## Room input
 
 1. Optional JPG/PNG floor-plan image is loaded as a reference layer.
 2. User clicks wall corner points over the image.
 3. User measures as many walls as possible.
-4. Additional cross-room measurements can be added, especially width and depth through the room center.
+4. Additional cross-room measurements can be added.
 5. `ConstraintGeometrySolver` fits the polygon to explicit physical measurements.
 6. Missing wall dimensions are inferred from the solved geometry.
 7. Conflicts are reported rather than silently discarded.
 8. User enters room height.
 9. The solved 2D polygon is extruded into a 3D volume.
 
-The image is reference geometry / initial guess. Explicit physical measurements are authoritative constraints.
+Explicit physical measurements are authoritative constraints; the image is only reference geometry / initial guess.
 
-## Loudspeakers and subwoofers
+## Speaker library and models
 
-The architecture supports any number of `Speaker` instances.
+`SpeakerModel` is reusable loudspeaker/subwoofer data. It may represent home, studio, installation or PA products.
 
-Each speaker has:
-- XYZ position
-- orientation
-- LF frequency response
-- enabled state
-- independent `SignalChain`
+Typical library layout:
 
-Each speaker is bound to an independently draggable `S3D/domains/acoustics/SpeakerNode`. Moving a speaker updates its XYZ position, modal coupling, phase-aware combined field and visible field samples continuously during pointer movement. Releasing the pointer is not required before recalculation.
+```text
+speaker-library/
+  <manufacturer>/
+    <model>.json
+  generic/
+    <model>.json
+```
+
+A model may contain dimensions, frequency range, frequency response, categories and directivity data. Library files are data, not executable application code. Missing manufacturer data must not be fabricated as measured truth.
+
+A `Speaker` instance references a `SpeakerModel` and owns project-specific state such as position, orientation, signal chain and enabled state. The same model may be instantiated any number of times.
+
+## Directivity / dispersion
+
+`DirectivityModel` is frequency- and angle-dependent. Simple horizontal/vertical coverage angles are permitted as an approximation, while higher-resolution polar data may replace them later without changing the Speaker interface.
+
+Directivity is evaluated from speaker-local azimuth/elevation after applying speaker orientation. It participates in acoustic coupling and is not merely a visualization overlay.
+
+Omnidirectional behavior is explicit. Subwoofers may use an omni approximation where appropriate, but directional subs and arrays remain supported. No global 360-degree high-frequency assumption exists.
+
+## Speaker sets
+
+`SpeakerSet` is a structural group of real `Speaker` instances. Typical set types include:
+
+- generic
+- line-array
+- cluster
+- sub-array
+- stack
+- distributed
+
+Each member has a local position and local orientation relative to the set. The set owns one parent world transform:
+
+```text
+memberWorldTransform = setWorldTransform × memberLocalTransform
+```
+
+Acoustic calculation still evaluates the individual speakers; the set is not a replacement acoustic source model.
+
+### Speaker Set Editor
+
+A dedicated `SpeakerSetEditor` edits the member-local structure before returning to the main visualizer. It supports 3D preview, add/remove, XYZ position, orientation, duplicate, mirror, align/distribute and type-specific helpers.
+
+Examples:
+
+- line array: order, spacing, splay angles, array tilt, curvature
+- cluster: free member positions/orientations
+- sub array: spacing, arc/radius and member processing trims
+- generic: free member transforms
+
+In the main visualizer the complete set may be moved/rotated as one manipulation target while individual member transforms remain intact.
+
+## Loudspeakers and signal processing
+
+The architecture supports any number of `Speaker` and `SpeakerSet` instances.
 
 Signal processors required in V1:
 - Gain
@@ -71,16 +119,16 @@ Initial filter families:
 - Linkwitz-Riley
 - Bessel
 
-A `CrossoverNetwork` routes speakers or speaker groups through independent signal chains. Crossover is not a special solver.
+A `CrossoverNetwork` routes individual speakers or sets through independent signal chains. Crossover is routing plus signal processing, not a special acoustic solver.
 
 ## Phase-aware summation
 
-Multiple speakers/subwoofers are summed as complex acoustic pressure.
+Multiple sources are summed as complex acoustic pressure.
 
 ```text
-speaker response
+speaker model response
 × signal chain transfer function
-× modal/spatial coupling
+× position/orientation/directivity coupling
 × room response
 = complex source contribution
 
@@ -90,7 +138,7 @@ speaker response
 
 Do not sum dB magnitudes.
 
-This is required for meaningful subwoofer placement, delay, polarity and crossover analysis.
+SpeakerSet members are resolved to world transforms and summed as their individual speaker contributions.
 
 ## Room-mode visualization
 
@@ -98,71 +146,24 @@ The visualization supports:
 - one selected frequency
 - a user-selected frequency range
 - multiple aggregation modes for range visualization
-- 3D slices
-- samples
+- 2D heatmap
+- 3D orthogonal slices
+- 2D + 3D together
 - later volume rendering / isosurfaces
 
-The original 2D heatmap remains available. The V1 3D view adds independently positioned XZ, XY and YZ field slices with one shared color scale. Users can show the 2D view, the 3D view or both together. A single floor-level heatmap is not considered a complete 3D field view.
+The 2D heatmap remains available. The 3D view uses independently configurable XZ, XY and YZ field slices with a shared value range. A single floor-level heatmap is not considered a complete 3D field view.
 
-`FrequencyRangeController` is reusable state in `S3D/domains/acoustics`. It owns frequency-range semantics, while AcousticMate decides how the selected range is interpreted in its calculations.
+`FrequencyRangeController` owns reusable frequency-range semantics, while AcousticMate decides how the range is interpreted in calculations. A selected analysis range must not imply an unrelated hard-coded global solver maximum.
 
-The purpose of the visualization is to make the spatial acoustic field directly inspectable. This includes making it easier for the user to identify acoustically interesting areas, such as pressure maxima, minima and problematic regions.
+The visualization is intended to expose spatial pressure maxima, minima and problematic regions directly.
 
 ## Absorbers and diffusors
 
-AcousticMate does **not** model absorbers or diffusors.
-
-It does not:
-- create absorber/diffusor objects
-- place them in the scene
-- recommend their locations
-- simulate their material behaviour
-
-The 3D acoustic visualization simply makes potential locations easier for the user to inspect and decide manually.
-
-## Dependency outline
-
-```text
-ImageReferenceLayer
-        │
-        ▼
-PolygonEditor
-        │
-        ├──────── Measurement[]
-        │               │
-        ▼               ▼
-ConstraintGeometrySolver
-        │
-        ▼
-ExtrudedVolume ─────────────────────► S3D Scene
-        │
-        ▼
-AcousticDomain
-        │
-        ▼
-RoomModeSolver
-        │
-        ├──────── AcousticMode[]
-        │
-Speaker[] ─► SignalChain / CrossoverNetwork
-        │
-        ├──────── SpeakerModeCoupling
-        │
-        ▼
-CombinedAcousticField
-        │
-        ├──────── FrequencyRangeController
-        │
-        ▼
-ScalarField / FrequencyField
-        │
-        ▼
-ScalarFieldView
-```
+AcousticMate does **not** model absorbers or diffusors. It does not create them, place them, recommend locations automatically or simulate material behavior. The field visualization only helps the user inspect the room and decide manually.
 
 ## Start scope
 
-The contracts are intentionally sufficient to begin implementation without committing to:
+The contracts do not yet require:
 - sloped ceilings
 - floor/ceiling shape mismatch
 - holes in room geometry
@@ -170,5 +171,6 @@ The contracts are intentionally sufficient to begin implementation without commi
 - FIR processing
 - manufacturer-specific DSP formats
 - acoustic-treatment modelling
+- nested SpeakerSets
 
-Those can be added later as separate modules if the project ever needs them.
+These may be added later as separate modules.
