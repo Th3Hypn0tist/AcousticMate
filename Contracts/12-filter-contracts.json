@@ -1,0 +1,60 @@
+{
+  "base": {
+    "module": "SignalProcessor",
+    "scope": "AcousticMate",
+    "instantiable": true,
+    "data": {
+      "id": "string",
+      "enabled": "boolean"
+    },
+    "contract": {
+      "transfer": "function(frequencyHz) => complex"
+    }
+  },
+  "processors": {
+    "Gain": {
+      "parameters": {
+        "db": "number"
+      }
+    },
+    "Delay": {
+      "parameters": {
+        "ms": "number"
+      }
+    },
+    "Polarity": {
+      "parameters": {
+        "inverted": "boolean"
+      }
+    },
+    "HighPassFilter": {
+      "parameters": {
+        "family": "Butterworth | LinkwitzRiley | Bessel",
+        "order": "integer",
+        "frequency": "Hz"
+      }
+    },
+    "LowPassFilter": {
+      "parameters": {
+        "family": "Butterworth | LinkwitzRiley | Bessel",
+        "order": "integer",
+        "frequency": "Hz"
+      }
+    },
+    "ParametricEQ": {
+      "parameters": {
+        "frequency": "Hz",
+        "gain": "dB",
+        "q": "number"
+      }
+    }
+  },
+  "v1Required": [
+    "Gain",
+    "Delay",
+    "Polarity",
+    "HighPassFilter",
+    "LowPassFilter",
+    "ParametricEQ"
+  ]
+}

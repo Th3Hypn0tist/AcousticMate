@@ -1,0 +1,19 @@
+{
+  "module": "AcousticMateWebGUI",
+  "scope": "App",
+  "inputs": {
+    "webgui": "WebGUI instance",
+    "theme": "built-in theme name | path | URL | null"
+  },
+  "responsibility": [
+    "compose AcousticMate controls from concept-free WebGUI primitives",
+    "bind application state to DOM events and properties",
+    "pass theme selection when the WebGUI instance is created"
+  ],
+  "rules": [
+    "WebGUI does not know AcousticMate concepts",
+    "AcousticMate labels and workflows remain in the application composition",
+    "built-in WebGUI themes remain in the WebGUI themes directory",
+    "project-owned themes may live anywhere in the AcousticMate project"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "package": "acousticmate-contracts",
+  "version": "0.4.0",
+  "files": [
+    "00-project-contract.json",
+    "01-image-reference-layer.json",
+    "02-polygon-editor.json",
+    "03-measurement.json",
+    "04-constraint-geometry-solver.json",
+    "05-extruded-volume.json",
+    "06-scalar-field.json",
+    "07-scalar-field-view.json",
+    "08-acoustic-domain.json",
+    "09-room-mode-solver.json",
+    "10-speaker.json",
+    "11-signal-chain.json",
+    "12-filter-contracts.json",
+    "13-crossover-network.json",
+    "14-speaker-mode-coupling.json",
+    "15-combined-acoustic-field.json",
+    "16-frequency-range-controller.json",
+    "17-framework-boundaries.json",
+    "18-webgui-wiring-contract.json",
+    "19-app-wiring-contract.json",
+    "README.md",
+    "manifest.json"
+  ],
+  "status": "ready-for-implementation"
+}

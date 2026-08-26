@@ -1,0 +1,23 @@
+{
+  "module": "Speaker",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "data": {
+    "id": "string",
+    "name": "string",
+    "position": "[x,y,z]",
+    "orientation": "[x,y,z,w]",
+    "frequencyResponse": [
+      [
+        "Hz",
+        "dB"
+      ]
+    ],
+    "signalChain": "SignalChain | null",
+    "enabled": "boolean"
+  },
+  "rules": [
+    "speaker count is unrestricted by architecture",
+    "speaker response may contain only the frequency range relevant to the project"
+  ]
+}

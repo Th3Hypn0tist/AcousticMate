@@ -1,0 +1,27 @@
+{
+  "module": "FrequencyRangeController",
+  "scope": "S3D/domains/acoustics",
+  "instantiable": true,
+  "data": {
+    "minHz": "number",
+    "maxHz": "number",
+    "selectedHz": "number | null",
+    "mode": "single | range"
+  },
+  "operations": [
+    "setMin",
+    "setMax",
+    "setRange",
+    "setSelectedFrequency",
+    "setMode"
+  ],
+  "events": [
+    "rangeChanged",
+    "selectedFrequencyChanged",
+    "modeChanged"
+  ],
+  "rules": [
+    "controller owns frequency-range semantics but does not interpret acoustic results",
+    "consumers decide how a frequency range is aggregated"
+  ]
+}

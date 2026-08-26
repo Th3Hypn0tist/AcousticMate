@@ -1,0 +1,44 @@
+{
+  "name": "AcousticMate",
+  "version": "0.4.0",
+  "runtime": "browser",
+  "language": "JavaScript",
+  "renderer": "S3D",
+  "gui": "WebGUI",
+  "principles": [
+    "S3D-first",
+    "all reusable functionality is modular",
+    "all stateful functionality is instantiable",
+    "no application singleton state",
+    "S3D core must not depend on domains",
+    "reusable acoustic modules may live in S3D domains/acoustics",
+    "WebGUI remains completely concept-free",
+    "physics must not depend on rendering",
+    "rendering must not contain acoustic calculations",
+    "meters are the canonical physical unit",
+    "speaker count is not limited by architecture",
+    "multi-source acoustic summation is phase-aware",
+    "frequency range selection is a first-class visualization control"
+  ],
+  "coordinateSystem": {
+    "x": "horizontal",
+    "y": "vertical",
+    "z": "depth",
+    "floorPlane": "XZ"
+  },
+  "v1Geometry": {
+    "floor": "single simple polygon",
+    "ceiling": "same polygon as floor",
+    "height": "constant",
+    "floorLevel": 0,
+    "holes": false,
+    "slopedCeiling": false
+  },
+  "layerBoundaries": {
+    "WebGUI": "concept-free minimalist DOM construction and structural rendering",
+    "S3D/core": "domain-independent structural 3D runtime, geometry, interaction and rendering",
+    "S3D/domains/acoustics": "reusable instantiable acoustic structures and visualizations",
+    "AcousticMate": "application-specific acoustic calculations, project state and orchestration",
+    "App": "instances + wiring + WebGUI composition"
+  }
+}

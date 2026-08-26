@@ -1,0 +1,35 @@
+{
+  "module": "ScalarFieldView",
+  "scope": "S3D",
+  "instantiable": true,
+  "inputs": {
+    "field": "ScalarField | FrequencyField"
+  },
+  "modes": [
+    "slice",
+    "samples",
+    "volume",
+    "isosurface"
+  ],
+  "controls": {
+    "frequency": "number | null",
+    "frequencyRange": "[minHz,maxHz] | null",
+    "aggregation": "single | peak | rms | energy | sum"
+  },
+  "operations": [
+    "setField",
+    "setFrequency",
+    "setFrequencyRange",
+    "setAggregation",
+    "setRange",
+    "setResolution",
+    "show",
+    "hide",
+    "destroy"
+  ],
+  "events": [
+    "frequencyChanged",
+    "frequencyRangeChanged",
+    "aggregationChanged"
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "module": "AcousticMateApp",
+  "scope": "App",
+  "responsibility": [
+    "instantiate S3D modules",
+    "instantiate one or more WebGUI runtimes",
+    "instantiate AcousticMate domain modules",
+    "wire events and data flow",
+    "manage project state",
+    "compose application UI from WebGUI primitives"
+  ],
+  "mustNot": [
+    "contain acoustic equations that belong in domain solvers",
+    "duplicate S3D generic geometry functionality",
+    "add AcousticMate concepts to WebGUI",
+    "copy reusable S3D domain modules into the application",
+    "mutate module internals outside public contracts",
+    "model acoustic absorbers or diffusors as application objects",
+    "recommend absorber or diffusor placement automatically"
+  ],
+  "primaryFlow": [
+    "load optional JPG/PNG reference",
+    "trace room polygon",
+    "add wall and cross-room measurements",
+    "solve constrained geometry",
+    "extrude room by height",
+    "place one or more speakers",
+    "configure each speaker signal chain and crossover routing",
+    "solve room modes",
+    "compute phase-aware combined acoustic field",
+    "select single frequency or frequency range",
+    "visualize field in 3D"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "module": "AcousticDomain",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "inputs": {
+    "volumeGeometry": "VolumeGeometry",
+    "boundaryConditions": "BoundaryCondition[] | null"
+  },
+  "defaults": {
+    "boundary": "rigid"
+  },
+  "outputs": {
+    "domain": "solver-ready acoustic volume"
+  }
+}

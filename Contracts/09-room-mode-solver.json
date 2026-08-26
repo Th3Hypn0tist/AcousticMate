@@ -1,0 +1,29 @@
+{
+  "module": "RoomModeSolver",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "inputs": {
+    "domain": "AcousticDomain",
+    "frequencyRange": "[minHz,maxHz]",
+    "speedOfSound": "number"
+  },
+  "strategies": {
+    "analytical": "supported geometries only",
+    "numerical": "arbitrary supported geometry"
+  },
+  "outputs": {
+    "modes": "AcousticMode[]"
+  },
+  "acousticMode": {
+    "id": "string",
+    "frequency": "number",
+    "eigenvalue": "number",
+    "classification": "axial | tangential | oblique | numerical",
+    "field": "ScalarField"
+  },
+  "rules": [
+    "solver strategy is hidden behind one interface",
+    "rectangular rooms may use analytical fast path",
+    "arbitrary supported room shapes use numerical eigenmode solving"
+  ]
+}
