@@ -42,7 +42,12 @@ test('sub-array helper creates a straight centered row when arc is zero', () => 
   const members = [0, 1, 2, 3].map(index => new Speaker({ id: `sub${index}` }));
   const set = new SpeakerSet({ id: 'subs', type: 'sub-array', members: members.map(speaker => ({ speaker })) });
   applySubArrayLayout(set, { spacing: .8, arcDeg: 0 });
-  assert.deepEqual(set.members.map(member => member.localPosition), [[-1.2, 0, 0], [-.4, 0, 0], [.4, 0, 0], [1.2, 0, 0]]);
+  const expected = [-1.2, -.4, .4, 1.2];
+  set.members.forEach((member, index) => {
+    close(member.localPosition[0], expected[index]);
+    close(member.localPosition[1], 0);
+    close(member.localPosition[2], 0);
+  });
 });
 
 test('cluster helper fans members around the set forward axis', () => {
