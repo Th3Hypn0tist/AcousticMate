@@ -4,18 +4,31 @@ AcousticMate is a browser-based room-acoustics tool built from the standalone We
 
 ## Current vertical slice
 
-- analytical rectangular-room modes
+- analytical rectangular-room modes with normalized modal weighting
 - multiple independently draggable speaker nodes
 - phase-aware complex pressure summation
-- live field resampling while a speaker moves
+- frequency-dependent loudspeaker directivity and orientation
+- JSON-backed reusable speaker library with generic starting models
+- structural `SpeakerSet` groups for line arrays, clusters, sub arrays, stacks and generic/distributed groups
+- dedicated SpeakerSet editor using member-local positions and orientations
+- line-array, cluster and sub-array geometry helpers
+- complete-set manipulation in the main visualizer while member speakers remain individually calculated
+- live field resampling while a speaker or set moves
 - selectable 2D heatmap, 3D orthogonal slices or both together
-- horizontal speaker dragging and Shift-drag vertical placement
+- independently adjustable 3D slice counts per axis
+- horizontal dragging and Shift-drag vertical placement
 - per-speaker gain, delay and polarity
 - Butterworth, Linkwitz–Riley and Bessel high/low-pass filters
 - per-speaker parametric EQ
-- reusable signal-chain and crossover-routing models
-- frequency slider and speaker enable controls
+- reusable signal-chain and crossover-routing models, including SpeakerSet targets
+- frequency slider and speaker/set enable controls
 - S3D orbit and zoom controls
+
+## Speaker library
+
+Speaker definitions are data files under `speaker-library/`. The manifest lists available models and each model may provide dimensions, frequency response and frequency-dependent directivity. Generic definitions are explicitly placeholders rather than manufacturer measurement data.
+
+Manufacturer-specific libraries can be added without changing solver or UI code.
 
 ## Run locally
 
