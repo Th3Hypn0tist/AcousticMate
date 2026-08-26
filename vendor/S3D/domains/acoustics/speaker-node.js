@@ -7,6 +7,28 @@ function normalizedDirection(value) {
   return value.map(component => component / magnitude);
 }
 
+function quaternionDirection(orientation, forward = [0, 0, 1]) {
+  if (!Array.isArray(orientation) || orientation.length !== 4 || orientation.some(component => !Number.isFinite(component))) return normalizedDirection(forward);
+  const magnitude = Math.hypot(...orientation);
+  if (magnitude <= Number.EPSILON) return normalizedDirection(forward);
+  const [qx, qy, qz, qw] = orientation.map(component => component / magnitude);
+  const [vx, vy, vz] = normalizedDirection(forward);
+  const tx = 2 * (qy * vz - qz * vy);
+  const ty = 2 * (qz * vx - qx * vz);
+  const tz = 2 * (qx * vy - qy * vx);
+  return normalizedDirection([
+    vx + qw * tx + (qy * tz - qz * ty),
+    vy + qw * ty + (qz * tx - qx * tz),
+    vz + qw * tz + (qx * ty - qy * tx),
+  ]);
+}
+
+function numericLabel(value) {
+  const text = String(value ?? '').trim();
+  const match = text.match(/(?:^|\D)(\d+)$/);
+  return match?.[1] ?? null;
+}
+
 class SpeakerNode extends SceneObject {
   constructor({
     id,
@@ -43,28 +65,32 @@ class SpeakerNode extends SceneObject {
   setEnabled(value) { this.enabled = Boolean(value); this.emit('enabledChanged', { enabled: this.enabled }); return this; }
   setLabel(value) { this.label = value == null ? null : String(value); return this; }
   setDirection(value) { this.direction = normalizedDirection(value); return this; }
+  effectiveDirection() { return quaternionDirection(this.model?.orientation, this.direction); }
+  effectiveLabel() { return this.label ?? this.model?.displayLabel ?? numericLabel(this.model?.name) ?? numericLabel(this.model?.id); }
 
   draw(renderer, context = {}) {
     if (!this.enabled) return;
     const center = this.worldPosition();
+    const direction = this.effectiveDirection();
     renderer?.box?.(center, this.scale, this.dragging ? this.activeColor : this.color, false, this, context);
 
     const top = [...center];
     top[1] += this.scale[1] + .035;
     renderer?.box?.(top, [.07, .035, .07], this.directionColor, false, this, context);
 
-    const shaftStart = center.map((component, index) => component + this.direction[index] * .2);
-    const tip = center.map((component, index) => component + this.direction[index] * this.directionLength);
+    const shaftStart = center.map((component, index) => component + direction[index] * .2);
+    const tip = center.map((component, index) => component + direction[index] * this.directionLength);
     renderer?.line?.(shaftStart, tip, this.directionColor, this, context);
     renderer?.box?.(tip, [.045, .045, .045], this.directionColor, false, this, context);
 
-    if (this.label) {
+    const label = this.effectiveLabel();
+    if (label) {
       const labelPosition = [...center];
       labelPosition[1] += this.scale[1] + .22;
-      const width = Math.max(.16, this.label.length * .12);
-      renderer?.billboardText?.(this.label, labelPosition, width, .18, this.labelColor, this, context);
+      const width = Math.max(.16, label.length * .12);
+      renderer?.billboardText?.(label, labelPosition, width, .18, this.labelColor, this, context);
     }
   }
 }
 
-export { SpeakerNode };
+export { SpeakerNode, numericLabel, quaternionDirection };
