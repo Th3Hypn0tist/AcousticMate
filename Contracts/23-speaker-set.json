@@ -1,0 +1,49 @@
+{
+  "module": "SpeakerSet",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "purpose": "Structural group of Speaker instances with one parent transform and editable member-local transforms",
+  "data": {
+    "id": "string",
+    "name": "string",
+    "type": "generic | line-array | cluster | sub-array | stack | distributed",
+    "position": "[x,y,z]",
+    "orientation": "[x,y,z,w]",
+    "members": "SpeakerSetMember[]",
+    "signalChain": "SignalChain | null",
+    "enabled": "boolean",
+    "metadata": "object"
+  },
+  "member": {
+    "speaker": "Speaker",
+    "localPosition": "[x,y,z]",
+    "localOrientation": "[x,y,z,w]",
+    "gainTrimDb": "number | null",
+    "delayTrimMs": "number | null"
+  },
+  "operations": [
+    "addMember",
+    "removeMember",
+    "setPosition",
+    "setOrientation",
+    "setMemberPosition",
+    "setMemberOrientation",
+    "setEnabled",
+    "setSignalChain"
+  ],
+  "transformRule": "memberWorldTransform = setWorldTransform × memberLocalTransform",
+  "typeHelpers": {
+    "line-array": ["element order", "spacing", "splay angles", "array tilt", "curvature helpers"],
+    "cluster": ["free member positions", "free member orientations"],
+    "sub-array": ["spacing", "arc/radius helpers", "member delay/gain helpers"],
+    "generic": ["free member positions", "free member orientations"]
+  },
+  "rules": [
+    "a set is a group of real Speaker instances rather than a replacement speaker model",
+    "all members remain independently addressable for acoustic calculation",
+    "moving or rotating the set changes every member world transform without rewriting member-local transforms",
+    "set type selects editor helpers and topology semantics but does not create a separate acoustic solver",
+    "line arrays and clusters are represented through SpeakerSet rather than encoded as special SpeakerModel instances",
+    "nested sets are not required by this contract"
+  ]
+}

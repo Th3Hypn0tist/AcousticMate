@@ -1,0 +1,16 @@
+{
+  "id": "generic/line-array-element",
+  "manufacturer": "Generic",
+  "model": "Line Array Element",
+  "type": "line-array-element",
+  "categories": ["pa", "installation"],
+  "dimensions": { "width": 0.58, "height": 0.26, "depth": 0.42 },
+  "frequencyRange": [65, 18000],
+  "frequencyResponse": [[65, -6], [90, -2], [120, 0], [1000, 0], [10000, -1], [18000, -6]],
+  "directivity": {
+    "mode": "simple-coverage",
+    "horizontalByFrequency": [[125, 140], [500, 110], [1000, 100], [4000, 90], [10000, 80]],
+    "verticalByFrequency": [[125, 90], [500, 40], [1000, 20], [4000, 12], [10000, 10]]
+  },
+  "metadata": { "source": "generic-placeholder", "measured": false }
+}

@@ -1,0 +1,34 @@
+{
+  "module": "SpeakerModel",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "purpose": "Reusable loudspeaker/subwoofer definition suitable for manufacturer libraries and custom user models",
+  "data": {
+    "id": "string",
+    "manufacturer": "string | null",
+    "model": "string",
+    "type": "point-source | line-array-element | subwoofer | column | monitor | custom",
+    "categories": "string[]",
+    "dimensions": "{width,height,depth} | null",
+    "frequencyRange": "[minHz,maxHz] | null",
+    "frequencyResponse": "[[Hz,dB], ...]",
+    "directivity": "DirectivityModel | null",
+    "metadata": "object"
+  },
+  "library": {
+    "layout": "speaker-library/<manufacturer>/<model>.json",
+    "rules": [
+      "library definitions are data, not application code",
+      "manufacturer folders are organizational only and do not affect acoustic semantics",
+      "the library may contain home, studio, installation and PA products without architectural separation",
+      "custom and generic models are first-class definitions",
+      "one SpeakerModel may be referenced by any number of Speaker instances"
+    ]
+  },
+  "rules": [
+    "frequency range is model data, not a global solver limit",
+    "missing manufacturer data must not be fabricated as measured truth",
+    "simple coverage data may coexist with higher-resolution polar data",
+    "speaker model data remains independent of S3D rendering"
+  ]
+}

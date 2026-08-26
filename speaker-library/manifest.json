@@ -1,0 +1,7 @@
+{
+  "models": [
+    "generic/point-source.json",
+    "generic/line-array-element.json",
+    "generic/subwoofer.json"
+  ]
+}

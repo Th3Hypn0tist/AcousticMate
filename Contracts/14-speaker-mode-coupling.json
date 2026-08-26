@@ -8,11 +8,15 @@
   },
   "outputs": {
     "spatialCoupling": "complex | number",
+    "directivityGain": "complex | number",
     "responseGain": "complex",
     "combinedExcitation": "complex"
   },
   "rules": [
     "speaker position affects modal excitation",
-    "signal-chain phase must be preserved"
+    "speaker orientation and DirectivityModel affect coupling when directional data is available",
+    "signal-chain phase must be preserved",
+    "directivity participates in source coupling rather than being applied only as a post-render visualization effect",
+    "SpeakerSet members are coupled as their individual Speaker instances using their resolved world transforms"
   ]
 }

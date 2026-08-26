@@ -1,0 +1,28 @@
+{
+  "module": "DirectivityModel",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "purpose": "Frequency- and angle-dependent loudspeaker radiation model",
+  "data": {
+    "mode": "simple-coverage | polar-data | omni | custom",
+    "horizontalByFrequency": "[[Hz,degrees], ...] | null",
+    "verticalByFrequency": "[[Hz,degrees], ...] | null",
+    "polarData": "object | null",
+    "referenceAxis": "speaker-local forward axis"
+  },
+  "evaluation": {
+    "output": "gainLinear(frequencyHz, azimuthDeg, elevationDeg)",
+    "rules": [
+      "orientation transforms world-space direction into speaker-local azimuth/elevation",
+      "directivity may vary with frequency",
+      "nominal coverage angles are an approximation and must not be treated as complete polar data",
+      "omnidirectional behavior is explicit and not the default for every speaker type",
+      "subwoofers may use omni approximation when appropriate, but directional subwoofer models and arrays remain supported"
+    ]
+  },
+  "rules": [
+    "directivity participates in acoustic source coupling rather than being visualization-only metadata",
+    "manufacturer polar data can replace simple coverage without changing Speaker or SpeakerSet interfaces",
+    "no fixed 360-degree high-frequency fallback is assumed"
+  ]
+}

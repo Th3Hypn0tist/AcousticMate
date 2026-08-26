@@ -2,25 +2,32 @@
   "module": "LiveSpeakerInteraction",
   "scope": "App wiring",
   "inputs": {
-    "speaker": "AcousticMate Speaker",
-    "node": "S3D/domains/acoustics/SpeakerNode",
-    "fieldView": "S3D/domains/acoustics/SampledFieldPlane"
+    "speaker": "AcousticMate Speaker | null",
+    "speakerSet": "AcousticMate SpeakerSet | null",
+    "node": "S3D/domains/acoustics/SpeakerNode | reusable set/group manipulation target",
+    "fieldView": "S3D/domains/acoustics/SampledFieldPlane | OrthogonalFieldSlices"
   },
   "flow": [
-    "pointer movement changes SpeakerNode position",
+    "pointer movement changes the selected Speaker or SpeakerSet transform",
     "horizontal drag changes XZ while vertical drag changes Y",
-    "positionChanged updates the bound Speaker model",
-    "speaker-mode coupling is invalidated",
+    "orientation controls may change speaker or set orientation",
+    "transform changes update the bound AcousticMate model",
+    "SpeakerSet member world transforms are resolved from parent and member-local transforms",
+    "affected speaker-mode coupling is invalidated",
     "combined acoustic field is invalidated",
     "visible field samples are recomputed on the next animation frame"
   ],
   "invariants": [
-    "speaker count is unrestricted by architecture",
-    "each speaker can be moved independently like a structural node",
-    "each speaker can be lifted vertically and its Y position participates in modal coupling",
-    "visual feedback continues throughout dragging",
+    "speaker and set counts are unrestricted by architecture",
+    "each standalone speaker can be moved independently",
+    "a SpeakerSet can be manipulated as one parent object in the main visualizer",
+    "moving a SpeakerSet preserves its member-local positions and orientations",
+    "individual member geometry is edited in SpeakerSetEditor",
+    "speaker height participates in modal coupling",
+    "speaker/set orientation participates in directional coupling when directivity data exists",
+    "visual feedback continues throughout manipulation",
     "drag end is not a calculation trigger or synchronization barrier",
-    "multiple rapid position events collapse into at most one field rebuild per animation frame",
-    "reduced preview resolution is allowed only when full resolution is restored after dragging"
+    "multiple rapid transform events collapse into at most one field rebuild per animation frame",
+    "reduced preview resolution is allowed only when full resolution is restored after manipulation"
   ]
 }
