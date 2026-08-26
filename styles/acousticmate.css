@@ -22,6 +22,7 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .slice-control { margin-top: .55rem; font-size: .78rem; }
 .slice-control input { width: 100%; }
 .slice-control output { font-size: .75rem; }
+.opacity-control { margin-top: .2rem; padding-bottom: .35rem; border-bottom: 1px solid color-mix(in srgb, var(--ui-border) 65%, transparent); }
 [data-role='viewport'] { display: block; width: 100%; height: 100%; min-width: 0; touch-action: none; cursor: crosshair; }
 .speaker-list, .member-list { display: grid; gap: .45rem; margin-top: .45rem; }
 .speaker-card { display: grid; gap: .35rem; padding: .65rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: var(--ui-control-bg); }
@@ -29,6 +30,9 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .member-card { background: color-mix(in srgb, var(--ui-control-bg) 86%, var(--ui-bg)); }
 .speaker-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
 .speaker-heading button { padding: .25rem .55rem; }
+.speaker-card-actions { display: flex; gap: .3rem; align-items: center; }
+.danger-button { border-color: color-mix(in srgb, #ff6b6b 45%, var(--ui-border)); }
+.danger-button:hover { border-color: #ff7f7f; }
 .coordinates, .model-name { color: var(--ui-muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
 .signal-chain { margin-top: .2rem; border-top: 1px solid var(--ui-border); padding-top: .45rem; }
 .signal-chain summary { color: var(--ui-focus); cursor: pointer; font-size: .82rem; }
