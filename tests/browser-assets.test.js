@@ -33,3 +33,20 @@ test('application stylesheet imports existing local stylesheets', async () => {
     await assert.doesNotReject(readFile(dependency), `Missing browser stylesheet: ${fileURLToPath(dependency)}`);
   }
 });
+
+test('speaker-library manifest references valid JSON model definitions', async () => {
+  const manifestUrl = new URL('../speaker-library/manifest.json', import.meta.url);
+  const manifest = JSON.parse(await readFile(manifestUrl, 'utf8'));
+  assert.ok(Array.isArray(manifest.models) && manifest.models.length > 0, 'Expected at least one speaker model');
+  const ids = new Set();
+  for (const path of manifest.models) {
+    const definitionUrl = new URL(path, manifestUrl);
+    const definition = JSON.parse(await readFile(definitionUrl, 'utf8'));
+    assert.equal(typeof definition.id, 'string');
+    assert.ok(definition.id.length > 0);
+    assert.equal(ids.has(definition.id), false, `Duplicate SpeakerModel id: ${definition.id}`);
+    ids.add(definition.id);
+    assert.equal(typeof definition.model, 'string');
+    assert.equal(typeof definition.type, 'string');
+  }
+});
