@@ -17,6 +17,8 @@
     "speaker contributions are summed as complex pressure, not dB magnitudes",
     "gain, delay, polarity, crossover filters and speaker response are applied before summation",
     "disabled speakers do not contribute",
-    "frequency-range visualization must be derived from the same underlying phase-aware field"
+    "frequency-range visualization must be derived from the same underlying phase-aware field",
+    "speaker position changes invalidate affected coupling and field samples immediately",
+    "interactive visualization recomputes at most once per animation frame and does not wait for drag end"
   ]
 }

@@ -1,4 +1,4 @@
-# AcousticMate Contracts v0.4
+# AcousticMate Contracts v0.5
 
 AcousticMate is a browser-based JavaScript/S3D room-acoustics tool focused initially on low-frequency room modes, loudspeaker/subwoofer placement, crossover/filter configuration and 3D visualization.
 
@@ -55,6 +55,8 @@ Each speaker has:
 - LF frequency response
 - enabled state
 - independent `SignalChain`
+
+Each speaker is bound to an independently draggable `S3D/domains/acoustics/SpeakerNode`. Moving a speaker updates its XYZ position, modal coupling, phase-aware combined field and visible field samples continuously during pointer movement. Releasing the pointer is not required before recalculation.
 
 Signal processors required in V1:
 - Gain

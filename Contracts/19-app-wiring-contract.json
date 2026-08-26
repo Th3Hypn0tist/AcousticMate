@@ -25,9 +25,11 @@
     "solve constrained geometry",
     "extrude room by height",
     "place one or more speakers",
+    "bind every speaker model to a draggable S3D SpeakerNode instance",
     "configure each speaker signal chain and crossover routing",
     "solve room modes",
     "compute phase-aware combined acoustic field",
+    "invalidate and resample the visible field continuously while any speaker moves",
     "select single frequency or frequency range",
     "visualize field in 3D"
   ]

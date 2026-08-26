@@ -1,0 +1,24 @@
+{
+  "module": "LiveSpeakerInteraction",
+  "scope": "App wiring",
+  "inputs": {
+    "speaker": "AcousticMate Speaker",
+    "node": "S3D/domains/acoustics/SpeakerNode",
+    "fieldView": "S3D/domains/acoustics/SampledFieldPlane"
+  },
+  "flow": [
+    "pointer movement changes SpeakerNode position",
+    "positionChanged updates the bound Speaker model",
+    "speaker-mode coupling is invalidated",
+    "combined acoustic field is invalidated",
+    "visible field samples are recomputed on the next animation frame"
+  ],
+  "invariants": [
+    "speaker count is unrestricted by architecture",
+    "each speaker can be moved independently like a structural node",
+    "visual feedback continues throughout dragging",
+    "drag end is not a calculation trigger or synchronization barrier",
+    "multiple rapid position events collapse into at most one field rebuild per animation frame",
+    "reduced preview resolution is allowed only when full resolution is restored after dragging"
+  ]
+}

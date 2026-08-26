@@ -18,6 +18,7 @@
     "concept-free DOM structure belongs in WebGUI",
     "domain-independent structural 3D functionality belongs in S3D/core",
     "reusable instantiable acoustic functionality may belong in S3D/domains/acoustics",
+    "the reusable draggable SpeakerNode view belongs in S3D/domains/acoustics while the AcousticMate speaker model remains in AcousticMate",
     "AcousticMate-specific project state, workflows and orchestration remain in AcousticMate",
     "a reusable module is implemented once in its owning framework and consumed without copying"
   ]
