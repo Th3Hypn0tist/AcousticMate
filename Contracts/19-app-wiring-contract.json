@@ -13,11 +13,22 @@
     "contain acoustic equations that belong in domain solvers",
     "duplicate S3D generic geometry functionality",
     "add AcousticMate concepts to WebGUI",
-    "copy reusable S3D domain modules into the application",
+    "fork or modify reusable S3D domain modules as AcousticMate-owned implementation",
     "mutate module internals outside public contracts",
     "model acoustic absorbers or diffusors as application objects",
     "recommend absorber or diffusor placement automatically"
   ],
+  "distribution": {
+    "layout": {
+      "S3D": "vendor/S3D",
+      "WebGUI": "vendor/WebGUI"
+    },
+    "rules": [
+      "a single AcousticMate clone contains all browser runtime dependencies",
+      "vendored directories are immutable upstream snapshots from the application's perspective",
+      "framework changes are made in their owning repositories and then refreshed into vendor"
+    ]
+  },
   "primaryFlow": [
     "load optional JPG/PNG reference",
     "trace room polygon",

@@ -1,0 +1,51 @@
+:root {
+  --ui-bg: #111722;
+  --ui-fg: #eef4ff;
+  --ui-muted: #9cabc1;
+  --ui-control-bg: #182131;
+  --ui-control-hover: #223047;
+  --ui-border: #33425c;
+  --ui-focus: #64a7ff;
+  --ui-dialog-overlay: #05070bb0;
+  --ui-radius: 10px;
+  --ui-gap: 0.65rem;
+  --ui-dialog-shadow: 0 18px 60px #0008;
+}
+
+[data-ui='row'] { display: flex; align-items: center; gap: var(--ui-gap); }
+[data-ui='stack'] { display: flex; flex-direction: column; gap: var(--ui-gap); }
+[data-ui='field'] { display: grid; gap: 0.35rem; color: var(--ui-fg); }
+[data-ui='button'], [data-ui='input'], [data-ui='select'], [data-ui='textarea'] {
+  box-sizing: border-box;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-control-bg);
+  color: var(--ui-fg);
+  font: inherit;
+  padding: 0.55rem 0.7rem;
+}
+[data-ui='button']:hover { background: var(--ui-control-hover); }
+[data-ui='button']:focus-visible], [data-ui='input']:focus-visible], [data-ui='select']:focus-visible], [data-ui='textarea']:focus-visible {
+  outline: 2px solid var(--ui-focus);
+  outline-offset: 2px;
+}
+[data-ui='dialog'] {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: var(--ui-dialog-overlay);
+}
+[data-ui='dialog'][hidden] { display: none; }
+[data-ui='dialog-card'] {
+  max-width: min(42rem, 100%);
+  max-height: 90vh;
+  overflow: auto;
+  border: 1px solid var(--ui-border);
+  border-radius: var(--ui-radius);
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  box-shadow: var(--ui-dialog-shadow);
+  padding: 1rem;
+}
