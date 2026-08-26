@@ -4,13 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AcousticMate</title>
-  <script type="importmap">
-    {
-      "imports": {
-        "@s3d/": "./vendor/S3D/",
-        "@webgui/": "./vendor/WebGUI/"
-      }
-    }
+  <script>
+    const showStartupError = error => {
+      const target = document.querySelector('#app');
+      if (!target) return;
+      const message = error?.reason?.message ?? error?.error?.message ?? error?.message ?? 'Unknown startup error';
+      const output = document.createElement('pre');
+      output.className = 'startup-error';
+      output.textContent = `AcousticMate could not start.\n\n${String(message)}`;
+      target.replaceChildren(output);
+    };
+    window.addEventListener('error', showStartupError);
+    window.addEventListener('unhandledrejection', showStartupError);
   </script>
 </head>
 <body>

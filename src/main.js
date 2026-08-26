@@ -1,6 +1,6 @@
-import { Scene, Box, PerspectiveCamera, Viewport, OrbitControls, PlaneDragController } from '@s3d/s3d.js';
-import { FrequencyRangeController, SampledFieldPlane, SpeakerNode } from '@s3d/domains/acoustics/index.js';
-import { WebGUI } from '@webgui/webgui.js';
+import { Scene, Box, PerspectiveCamera, Viewport, OrbitControls, PlaneDragController } from '../vendor/S3D/s3d.js';
+import { FrequencyRangeController, SampledFieldPlane, SpeakerNode } from '../vendor/S3D/domains/acoustics/index.js';
+import { WebGUI } from '../vendor/WebGUI/webgui.js';
 import { RectangularRoomField } from './rectangular-room-field.js';
 
 const gui = new WebGUI({ theme: new URL('../styles/acousticmate.css', import.meta.url) });
