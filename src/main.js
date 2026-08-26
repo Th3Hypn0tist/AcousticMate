@@ -27,6 +27,8 @@ const speakers = [];
 const speakerNodes = [];
 const speakerSets = [];
 const setNodes = [];
+let speakerSequence = 0;
+let speakerSetSequence = 0;
 const scene = new Scene();
 const speakerLibrary = new SpeakerLibrary();
 const editorState = { set: null, camera: null };
@@ -83,6 +85,8 @@ const field3DView = scene.add(new OrthogonalFieldSlices({
   slices: { x: dimensions.width / 2, y: dimensions.height / 2, z: dimensions.depth / 2 },
   resolution: { xz: [32, 24], xy: [32, 16], yz: [24, 16] },
   thickness: .018,
+  opacity: .18,
+  opacities: { x: .18, y: .18, z: .18 },
 }));
 field3DView.visible = false;
 field3DView.dirty = false;
@@ -186,11 +190,27 @@ function sliceCountControl(label, axis, value = 1) {
   return gui.field(label, gui.stack([input, output]), { className: 'slice-control' });
 }
 
+function sliceOpacityControl(label, axis, value = .18) {
+  const output = gui.h('output', { text: `${Math.round(value * 100)}%` });
+  const input = gui.input({
+    type: 'range', min: 0, max: 1, step: .01, value,
+    on: { input: event => {
+      const next = Number(event.target.value);
+      output.textContent = `${Math.round(next * 100)}%`;
+      field3DView.setAxisOpacity(axis, next);
+    } },
+  });
+  return gui.field(label, gui.stack([input, output]), { className: 'slice-control opacity-control' });
+}
+
 const sliceControls = gui.h('details', { className: 'slice-controls' }, [
   gui.h('summary', { text: '3D field slices' }),
   sliceCountControl('X slices', 'x', 1),
+  sliceOpacityControl('X opacity', 'x', .18),
   sliceCountControl('Y slices', 'y', 1),
+  sliceOpacityControl('Y opacity', 'y', .18),
   sliceCountControl('Z slices', 'z', 1),
+  sliceOpacityControl('Z opacity', 'z', .18),
 ]);
 
 const fieldViewSelector = gui.field('Field view', gui.select({
@@ -276,6 +296,22 @@ function updateSpeakerCard(speaker) {
   speaker.ui.enabled.textContent = speaker.enabled ? 'On' : 'Off';
 }
 
+function removeSpeaker(speaker, { refreshEditor = true } = {}) {
+  if (!speaker) return false;
+  const parentSet = speaker.parentSet;
+  if (parentSet) parentSet.removeMember(speaker);
+  if (speaker.node) scene.remove(speaker.node);
+  const speakerIndex = speakers.indexOf(speaker);
+  if (speakerIndex >= 0) speakers.splice(speakerIndex, 1);
+  const nodeIndex = speakerNodes.indexOf(speaker.node);
+  if (nodeIndex >= 0) speakerNodes.splice(nodeIndex, 1);
+  speaker.ui?.card?.remove();
+  speaker.ui = null;
+  if (refreshEditor && editorState.set && parentSet === editorState.set) renderSetEditor(parentSet);
+  invalidateField();
+  return true;
+}
+
 function buildSpeakerCard(speaker) {
   const coordinates = gui.h('span', { className: 'coordinates' });
   const enabled = gui.button('', { on: { click: () => {
@@ -284,28 +320,32 @@ function buildSpeakerCard(speaker) {
     enabled.textContent = speaker.enabled ? 'On' : 'Off';
     invalidateField();
   } } });
-  speaker.ui = { coordinates, enabled };
+  const remove = gui.button('Remove', { className: 'danger-button', on: { click: () => removeSpeaker(speaker) } });
   const modelName = speaker.model ? `${speaker.model.manufacturer ?? ''} ${speaker.model.model}`.trim() : 'Custom speaker';
   const card = gui.h('section', { className: 'speaker-card' }, [
-    gui.h('div', { className: 'speaker-heading' }, [gui.h('strong', { text: speaker.name }), enabled]),
+    gui.h('div', { className: 'speaker-heading' }, [
+      gui.h('strong', { text: speaker.name }),
+      gui.row([enabled, remove], { className: 'speaker-card-actions' }),
+    ]),
     gui.h('span', { className: 'model-name', text: modelName }),
     coordinates,
     gui.h('details', { className: 'signal-chain' }, [gui.h('summary', { text: 'Orientation' }), orientationControls(speaker)]),
     gui.h('details', { className: 'signal-chain' }, [gui.h('summary', { text: 'Signal chain' }), buildSignalControls(speaker)]),
   ]);
+  speaker.ui = { coordinates, enabled, remove, card };
   speakerList.append(card);
   updateSpeakerCard(speaker);
 }
 
 function addSpeaker({ position = null, model = null, parentSet = null, localPosition = null, name = null, buildCard = parentSet == null } = {}) {
-  const index = speakers.length;
-  const id = `speaker-${index + 1}`;
+  const sequence = ++speakerSequence;
+  const id = `speaker-${sequence}`;
   const processors = makeProcessors(id);
   const speaker = new Speaker({
     id,
-    name: name ?? `Speaker ${index + 1}`,
+    name: name ?? `Speaker ${sequence}`,
     model: model ?? speakerLibrary.list()[0],
-    position: position ?? [1 + (index % 4) * 1.1, .22, .8 + Math.floor(index / 4) * 1.1],
+    position: position ?? [1 + ((sequence - 1) % 4) * 1.1, .22, .8 + Math.floor((sequence - 1) / 4) * 1.1],
     signalChain: new SignalChain({ processors: Object.values(processors) }),
     enabled: true,
   });
@@ -360,10 +400,10 @@ function buildSetCard(set) {
 }
 
 function createSpeakerSet(type = 'generic') {
-  const index = speakerSets.length;
+  const sequence = ++speakerSetSequence;
   const set = new SpeakerSet({
-    id: `set-${index + 1}`,
-    name: `Speaker Set ${index + 1}`,
+    id: `set-${sequence}`,
+    name: `Speaker Set ${sequence}`,
     type,
     position: [dimensions.width / 2, Math.min(1.6, dimensions.height - .22), dimensions.depth / 2],
   });
@@ -429,16 +469,7 @@ function memberEditor(set, member) {
       renderSetEditor(set);
     },
   })));
-  const remove = gui.button('Remove', { on: { click: () => {
-    set.removeMember(speaker);
-    scene.remove(speaker.node);
-    const speakerIndex = speakers.indexOf(speaker);
-    if (speakerIndex >= 0) speakers.splice(speakerIndex, 1);
-    const nodeIndex = speakerNodes.indexOf(speaker.node);
-    if (nodeIndex >= 0) speakerNodes.splice(nodeIndex, 1);
-    renderSetEditor(set);
-    invalidateField();
-  } } });
+  const remove = gui.button('Remove', { className: 'danger-button', on: { click: () => removeSpeaker(speaker) } });
   const duplicate = gui.button('Duplicate', { on: { click: () => {
     addSpeaker({
       model: speaker.model,
