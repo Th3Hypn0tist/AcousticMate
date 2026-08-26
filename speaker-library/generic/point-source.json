@@ -1,0 +1,16 @@
+{
+  "id": "generic/point-source",
+  "manufacturer": "Generic",
+  "model": "Point Source",
+  "type": "point-source",
+  "categories": ["home", "studio", "pa", "installation"],
+  "dimensions": { "width": 0.32, "height": 0.52, "depth": 0.34 },
+  "frequencyRange": [55, 20000],
+  "frequencyResponse": [[55, -6], [80, -2], [100, 0], [1000, 0], [10000, -1], [20000, -6]],
+  "directivity": {
+    "mode": "simple-coverage",
+    "horizontalByFrequency": [[100, 180], [500, 120], [1000, 100], [4000, 80], [10000, 70]],
+    "verticalByFrequency": [[100, 160], [500, 100], [1000, 80], [4000, 60], [10000, 50]]
+  },
+  "metadata": { "source": "generic-placeholder", "measured": false }
+}
