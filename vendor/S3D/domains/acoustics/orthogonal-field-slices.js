@@ -8,7 +8,7 @@ const definitions = Object.freeze({
 });
 
 class OrthogonalFieldSlices extends SceneObject {
-  constructor({ id, field, bounds, slices = null, resolution = {}, thickness = .018, color = defaultColor, metadata = {} } = {}) {
+  constructor({ id, field, bounds, slices = null, counts = {}, resolution = {}, thickness = .018, opacity = .28, opacities = {}, color = defaultColor, metadata = {} } = {}) {
     super({ id, selectable: false, metadata });
     if (!field) throw new Error('OrthogonalFieldSlices requires a field function or sampleable object');
     if (!bounds?.min || !bounds?.max) throw new Error('OrthogonalFieldSlices requires min/max volume bounds');
@@ -20,11 +20,34 @@ class OrthogonalFieldSlices extends SceneObject {
       z: (bounds.min[2] + bounds.max[2]) / 2,
     };
     this.resolution = { xz: [32, 24], xy: [32, 16], yz: [24, 16], ...resolution };
+    this.counts = { x: 1, y: 1, z: 1, ...counts };
     this.thickness = Number(thickness);
+    this.opacity = this.validateOpacity(opacity);
+    this.opacities = {
+      x: this.validateOpacity(opacities.x ?? this.opacity),
+      y: this.validateOpacity(opacities.y ?? this.opacity),
+      z: this.validateOpacity(opacities.z ?? this.opacity),
+    };
     this.color = color;
     this.samples = [];
     this.dirty = true;
-    for (const axis of Object.keys(definitions)) this.validateSlice(axis, this.slices[axis]);
+    for (const axis of Object.keys(definitions)) {
+      this.slices[axis] = this.validateSlice(axis, this.slices[axis]);
+      this.counts[axis] = this.validateCount(axis, this.counts[axis]);
+    }
+  }
+
+  validateCount(axis, value) {
+    if (!definitions[axis]) throw new Error(`Unknown slice axis: ${axis}`);
+    value = Number(value);
+    if (!Number.isInteger(value) || value < 0 || value > 32) throw new Error(`Slice count ${axis} must be an integer from 0 to 32`);
+    return value;
+  }
+
+  validateOpacity(value) {
+    value = Number(value);
+    if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error('Slice opacity must be between 0 and 1');
+    return value;
   }
 
   validateSlice(axis, value) {
@@ -40,11 +63,32 @@ class OrthogonalFieldSlices extends SceneObject {
   setField(field) { this.field = field; return this.invalidate(); }
   setBounds(bounds) { this.bounds = { min: [...bounds.min], max: [...bounds.max] }; return this.invalidate(); }
   setSlice(axis, value) { this.slices[axis] = this.validateSlice(axis, value); return this.invalidate(); }
+  setSliceCount(axis, value) { this.counts[axis] = this.validateCount(axis, value); return this.invalidate(); }
+  setOpacity(value) {
+    this.opacity = this.validateOpacity(value);
+    for (const axis of Object.keys(definitions)) this.opacities[axis] = this.opacity;
+    return this.invalidate();
+  }
+  setAxisOpacity(axis, value) {
+    if (!definitions[axis]) throw new Error(`Unknown slice axis: ${axis}`);
+    this.opacities[axis] = this.validateOpacity(value);
+    return this.invalidate();
+  }
   setResolution(name, value) { this.resolution[name] = [...value]; return this.invalidate(); }
   invalidate() { this.dirty = true; return this; }
   sample(position) { return typeof this.field === 'function' ? this.field(...position) : this.field.sample(...position); }
 
-  sampleSlice(axis) {
+  slicePositions(axis) {
+    const definition = definitions[axis];
+    const count = this.counts[axis];
+    if (count === 0) return [];
+    if (count === 1) return [this.slices[axis]];
+    const low = this.bounds.min[definition.fixed];
+    const span = this.bounds.max[definition.fixed] - low;
+    return Array.from({ length: count }, (_, index) => low + span * (index + 1) / (count + 1));
+  }
+
+  sampleSlice(axis, fixedPosition = this.slices[axis]) {
     const definition = definitions[axis];
     const [nu, nv] = this.resolution[definition.resolution].map(Number);
     if (!Number.isInteger(nu) || !Number.isInteger(nv) || nu < 2 || nv < 2) throw new Error(`Slice ${axis} resolution requires two integers >= 2`);
@@ -54,24 +98,33 @@ class OrthogonalFieldSlices extends SceneObject {
     const samples = [];
     for (let iv = 0; iv < nv; iv++) for (let iu = 0; iu < nu; iu++) {
       const position = [0, 0, 0];
-      position[definition.fixed] = this.slices[axis];
+      position[definition.fixed] = fixedPosition;
       position[uAxis] = this.bounds.min[uAxis] + (iu + .5) * du;
       position[vAxis] = this.bounds.min[vAxis] + (iv + .5) * dv;
       const scale = [this.thickness, this.thickness, this.thickness];
       scale[uAxis] = du * .49;
       scale[vAxis] = dv * .49;
       const value = Number(this.sample(position));
-      samples.push({ axis, position, scale, value: Number.isFinite(value) ? value : 0 });
+      samples.push({ axis, slice: fixedPosition, position, scale, value: Number.isFinite(value) ? value : 0 });
     }
     return samples;
   }
 
   rebuild() {
-    const raw = Object.keys(definitions).flatMap(axis => this.sampleSlice(axis));
+    const raw = Object.keys(definitions).flatMap(axis => this.slicePositions(axis).flatMap(position => this.sampleSlice(axis, position)));
+    if (!raw.length) {
+      this.samples = [];
+      this.range = [0, 0];
+      this.dirty = false;
+      return;
+    }
     const low = Math.min(...raw.map(sample => sample.value));
     const high = Math.max(...raw.map(sample => sample.value));
     const span = Math.max(1e-12, high - low);
-    this.samples = raw.map(sample => ({ ...sample, color: this.color((sample.value - low) / span, sample.value, low, high) }));
+    this.samples = raw.map(sample => {
+      const color = this.color((sample.value - low) / span, sample.value, low, high);
+      return { ...sample, color: [color[0], color[1], color[2], this.opacities[sample.axis]] };
+    });
     this.range = [low, high];
     this.dirty = false;
   }
