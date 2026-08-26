@@ -6,6 +6,39 @@ function modeShape(mode, point, dimensions) {
     * Math.cos(mode.nz * Math.PI * point[2] / dimensions.depth);
 }
 
+function modeNormalization(mode, dimensions) {
+  const volume = dimensions.width * dimensions.height * dimensions.depth;
+  const multiplicity = (mode.nx ? 2 : 1) * (mode.ny ? 2 : 1) * (mode.nz ? 2 : 1);
+  return multiplicity / volume;
+}
+
+function modalSourceCoupling(mode, speaker, dimensions, frequencyHz) {
+  const k = [
+    mode.nx * Math.PI / dimensions.width,
+    mode.ny * Math.PI / dimensions.height,
+    mode.nz * Math.PI / dimensions.depth,
+  ];
+  const activeAxes = k.map((value, index) => value ? index : -1).filter(index => index >= 0);
+  if (!activeAxes.length) return [1, 0];
+  const componentCount = 2 ** activeAxes.length;
+  let real = 0;
+  let imaginary = 0;
+  for (let mask = 0; mask < componentCount; mask++) {
+    const direction = [...k];
+    let phase = 0;
+    for (let bit = 0; bit < activeAxes.length; bit++) {
+      const axis = activeAxes[bit];
+      const sign = mask & (1 << bit) ? 1 : -1;
+      direction[axis] *= sign;
+      phase += direction[axis] * speaker.position[axis];
+    }
+    const gain = typeof speaker.directivityGain === 'function' ? speaker.directivityGain(frequencyHz, direction) : 1;
+    real += gain * Math.cos(phase);
+    imaginary += gain * Math.sin(phase);
+  }
+  return [real / componentCount, imaginary / componentCount];
+}
+
 class RectangularRoomField {
   constructor({ dimensions, speakers = [], frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
     this.dimensions = { ...dimensions };
@@ -21,6 +54,7 @@ class RectangularRoomField {
   buildModes() {
     const { width, height, depth } = this.dimensions;
     if (![width, height, depth].every(value => Number.isFinite(value) && value > 0)) throw new Error('Room dimensions must be positive');
+    if (!Number.isFinite(this.maxFrequency) || this.maxFrequency <= 0) throw new Error('maxFrequency must be positive');
     const limits = [width, height, depth].map(length => Math.ceil(this.maxFrequency * 2 * length / this.speedOfSound));
     const modes = [];
     for (let nx = 0; nx <= limits[0]; nx++) for (let ny = 0; ny <= limits[1]; ny++) for (let nz = 0; nz <= limits[2]; nz++) {
@@ -48,7 +82,7 @@ class RectangularRoomField {
     if (this.preparedModes) return this.preparedModes;
     const omega = 2 * Math.PI * this.frequency;
     const speakers = this.speakers
-      .filter(speaker => speaker.enabled !== false)
+      .filter(speaker => typeof speaker.isAcousticallyEnabled === 'function' ? speaker.isAcousticallyEnabled() : speaker.enabled !== false)
       .map(speaker => ({ speaker, transfer: this.speakerTransfer(speaker) }));
     this.preparedModes = this.modes.map(mode => {
       const omegaMode = 2 * Math.PI * mode.frequency;
@@ -59,10 +93,13 @@ class RectangularRoomField {
       const roomImaginary = -denominatorImaginary / denominatorMagnitude;
       let sourceReal = 0;
       let sourceImaginary = 0;
+      const normalization = modeNormalization(mode, this.dimensions);
       for (const { speaker, transfer } of speakers) {
-        const coupling = modeShape(mode, speaker.position, this.dimensions);
-        sourceReal += coupling * transfer[0];
-        sourceImaginary += coupling * transfer[1];
+        const [couplingRealRaw, couplingImaginaryRaw] = modalSourceCoupling(mode, speaker, this.dimensions, this.frequency);
+        const couplingReal = couplingRealRaw * normalization;
+        const couplingImaginary = couplingImaginaryRaw * normalization;
+        sourceReal += couplingReal * transfer[0] - couplingImaginary * transfer[1];
+        sourceImaginary += couplingReal * transfer[1] + couplingImaginary * transfer[0];
       }
       return {
         mode,
@@ -92,4 +129,4 @@ class RectangularRoomField {
   }
 }
 
-export { RectangularRoomField, modeShape, SPEED_OF_SOUND };
+export { RectangularRoomField, modalSourceCoupling, modeNormalization, modeShape, SPEED_OF_SOUND };
