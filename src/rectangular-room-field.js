@@ -15,6 +15,7 @@ class RectangularRoomField {
     this.q = Number(q);
     this.speedOfSound = Number(speedOfSound);
     this.modes = this.buildModes();
+    this.preparedModes = null;
   }
 
   buildModes() {
@@ -30,10 +31,12 @@ class RectangularRoomField {
     return modes.sort((a, b) => a.frequency - b.frequency);
   }
 
-  setFrequency(value) { this.frequency = Number(value); return this; }
-  setSpeakers(speakers) { this.speakers = speakers; return this; }
+  invalidate() { this.preparedModes = null; return this; }
+  setFrequency(value) { this.frequency = Number(value); return this.invalidate(); }
+  setSpeakers(speakers) { this.speakers = speakers; return this.invalidate(); }
 
   speakerTransfer(speaker) {
+    if (typeof speaker.transferAt === 'function') return speaker.transferAt(this.frequency);
     const gain = 10 ** (Number(speaker.gainDb ?? 0) / 20);
     const polarity = speaker.polarityInverted ? Math.PI : 0;
     const delay = -2 * Math.PI * this.frequency * Number(speaker.delayMs ?? 0) / 1000;
@@ -41,27 +44,44 @@ class RectangularRoomField {
     return [gain * Math.cos(phase), gain * Math.sin(phase)];
   }
 
-  sampleComplex(x, y, z) {
-    const point = [x, y, z];
+  prepareModes() {
+    if (this.preparedModes) return this.preparedModes;
     const omega = 2 * Math.PI * this.frequency;
-    let real = 0;
-    let imaginary = 0;
-    for (const mode of this.modes) {
+    const speakers = this.speakers
+      .filter(speaker => speaker.enabled !== false)
+      .map(speaker => ({ speaker, transfer: this.speakerTransfer(speaker) }));
+    this.preparedModes = this.modes.map(mode => {
       const omegaMode = 2 * Math.PI * mode.frequency;
       const denominatorReal = omegaMode * omegaMode - omega * omega;
       const denominatorImaginary = omegaMode * omega / this.q;
       const denominatorMagnitude = denominatorReal ** 2 + denominatorImaginary ** 2 || 1;
       const roomReal = denominatorReal / denominatorMagnitude;
       const roomImaginary = -denominatorImaginary / denominatorMagnitude;
-      const atPoint = modeShape(mode, point, this.dimensions);
-      for (const speaker of this.speakers) {
-        if (speaker.enabled === false) continue;
-        const atSource = modeShape(mode, speaker.position, this.dimensions);
-        const coupling = atPoint * atSource;
-        const [sourceReal, sourceImaginary] = this.speakerTransfer(speaker);
-        real += coupling * (sourceReal * roomReal - sourceImaginary * roomImaginary);
-        imaginary += coupling * (sourceReal * roomImaginary + sourceImaginary * roomReal);
+      let sourceReal = 0;
+      let sourceImaginary = 0;
+      for (const { speaker, transfer } of speakers) {
+        const coupling = modeShape(mode, speaker.position, this.dimensions);
+        sourceReal += coupling * transfer[0];
+        sourceImaginary += coupling * transfer[1];
       }
+      return {
+        mode,
+        real: sourceReal * roomReal - sourceImaginary * roomImaginary,
+        imaginary: sourceReal * roomImaginary + sourceImaginary * roomReal,
+      };
+    });
+    return this.preparedModes;
+  }
+
+  sampleComplex(x, y, z) {
+    const point = [x, y, z];
+    let real = 0;
+    let imaginary = 0;
+    for (const prepared of this.prepareModes()) {
+      const { mode } = prepared;
+      const atPoint = modeShape(mode, point, this.dimensions);
+      real += atPoint * prepared.real;
+      imaginary += atPoint * prepared.imaginary;
     }
     return [real, imaginary];
   }

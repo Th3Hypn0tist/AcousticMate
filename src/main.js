@@ -2,6 +2,9 @@ import { Scene, Box, PerspectiveCamera, Viewport, OrbitControls, PlaneDragContro
 import { FrequencyRangeController, SampledFieldPlane, SpeakerNode } from '../vendor/S3D/domains/acoustics/index.js';
 import { WebGUI } from '../vendor/WebGUI/webgui.js';
 import { RectangularRoomField } from './rectangular-room-field.js';
+import { Speaker } from './speaker.js';
+import { SignalChain } from './signal-chain.js';
+import { Delay, Gain, HighPassFilter, LowPassFilter, ParametricEQ, Polarity } from './signal-processors.js';
 
 const gui = new WebGUI({ theme: new URL('../styles/acousticmate.css', import.meta.url) });
 const root = document.querySelector('#app');
@@ -58,45 +61,124 @@ const frequencySlider = gui.input({
 });
 const speakerList = gui.stack([], { className: 'speaker-list' });
 
-function updateSpeakerList() {
-  gui.replace(speakerList, speakerModels.map((speaker, index) => {
-    const [x, y, z] = speaker.position;
-    return gui.h('div', { className: 'speaker-row' }, [
-      gui.h('strong', { text: speaker.name }),
-      gui.h('span', { text: `x ${x.toFixed(2)} · y ${y.toFixed(2)} · z ${z.toFixed(2)}` }),
-      gui.button(speaker.enabled ? 'On' : 'Off', { on: { click: () => {
-        speaker.enabled = !speaker.enabled;
-        speaker.node.setEnabled(speaker.enabled);
-        fieldView.invalidate();
-        updateSpeakerList();
-      } } }),
-    ]);
-  }));
+function invalidateField() {
+  roomField.invalidate();
+  fieldView.invalidate();
+}
+
+function numberControl(label, value, { min, max, step = .1, update }) {
+  const input = gui.input({
+    type: 'number', value, min, max, step,
+    on: { input: event => {
+      if (event.target.value === '') return;
+      const next = Number(event.target.value);
+      if (!Number.isFinite(next) || (min != null && next < min) || (max != null && next > max)) {
+        event.target.setAttribute('aria-invalid', 'true');
+        return;
+      }
+      event.target.removeAttribute('aria-invalid');
+      update(next);
+      invalidateField();
+    } },
+  });
+  return gui.field(label, input, { className: 'compact-field' });
+}
+
+function filterControls(label, processor) {
+  const order = gui.select({
+    value: String(processor.order),
+    on: { change: event => { processor.setOrder(Number(event.target.value)); invalidateField(); } },
+  }, [1, 2, 3, 4, 6, 8].map(value => gui.option(String(value), String(value), { disabled: processor.family === 'LinkwitzRiley' && value % 2 !== 0 })));
+  const family = gui.select({
+    value: processor.family,
+    on: { change: event => {
+      processor.setFamily(event.target.value, false);
+      if (processor.family === 'LinkwitzRiley' && processor.order % 2 !== 0) processor.setOrder(2);
+      order.value = String(processor.order);
+      for (const option of order.options) option.disabled = processor.family === 'LinkwitzRiley' && Number(option.value) % 2 !== 0;
+      invalidateField();
+    } },
+  }, ['Butterworth', 'LinkwitzRiley', 'Bessel'].map(value => gui.option(value, value === 'LinkwitzRiley' ? 'Linkwitz–Riley' : value)));
+  return gui.h('fieldset', { className: 'processor-group' }, [
+    gui.h('legend', {}, [gui.input({ type: 'checkbox', checked: processor.enabled, on: { change: event => { processor.setEnabled(event.target.checked); invalidateField(); } } }), ` ${label}`]),
+    gui.field('Family', family, { className: 'compact-field' }),
+    gui.field('Order', order, { className: 'compact-field' }),
+    numberControl('Frequency (Hz)', processor.frequency, { min: 1, max: 1000, step: 1, update: value => processor.setFrequency(value) }),
+  ]);
+}
+
+function buildSignalControls(speaker) {
+  const { gain, delay, polarity, highPass, lowPass, peq } = speaker.processors;
+  return gui.h('div', { className: 'signal-controls' }, [
+    numberControl('Gain (dB)', gain.db, { min: -60, max: 24, update: value => gain.setDb(value) }),
+    numberControl('Delay (ms)', delay.ms, { min: -100, max: 100, update: value => delay.setMs(value) }),
+    gui.field('Invert polarity', gui.input({ type: 'checkbox', checked: polarity.inverted, on: { change: event => { polarity.setInverted(event.target.checked); invalidateField(); } } }), { className: 'check-field' }),
+    filterControls('High-pass filter', highPass),
+    filterControls('Low-pass filter', lowPass),
+    gui.h('fieldset', { className: 'processor-group' }, [
+      gui.h('legend', {}, [gui.input({ type: 'checkbox', checked: peq.enabled, on: { change: event => { peq.setEnabled(event.target.checked); invalidateField(); } } }), ' Parametric EQ']),
+      numberControl('Frequency (Hz)', peq.frequency, { min: 1, max: 1000, step: 1, update: value => peq.setFrequency(value) }),
+      numberControl('Gain (dB)', peq.gain, { min: -24, max: 24, update: value => peq.setGain(value) }),
+      numberControl('Q', peq.q, { min: .1, max: 30, step: .1, update: value => peq.setQ(value) }),
+    ]),
+  ]);
+}
+
+function buildSpeakerCard(speaker) {
+  const coordinates = gui.h('span', { className: 'coordinates' });
+  const enabled = gui.button('', { on: { click: () => {
+    speaker.setEnabled(!speaker.enabled);
+    speaker.node.setEnabled(speaker.enabled);
+    enabled.textContent = speaker.enabled ? 'On' : 'Off';
+    invalidateField();
+  } } });
+  speaker.ui = { coordinates, enabled };
+  const card = gui.h('section', { className: 'speaker-card' }, [
+    gui.h('div', { className: 'speaker-heading' }, [gui.h('strong', { text: speaker.name }), enabled]),
+    coordinates,
+    gui.h('details', { className: 'signal-chain' }, [gui.h('summary', { text: 'Signal chain' }), buildSignalControls(speaker)]),
+  ]);
+  speakerList.append(card);
+  updateSpeakerCard(speaker);
+}
+
+function updateSpeakerCard(speaker) {
+  const [x, y, z] = speaker.position;
+  speaker.ui.coordinates.textContent = `x ${x.toFixed(2)} · y ${y.toFixed(2)} · z ${z.toFixed(2)}`;
+  speaker.ui.enabled.textContent = speaker.enabled ? 'On' : 'Off';
 }
 
 function addSpeaker(position = null) {
   const index = speakerModels.length;
-  const model = {
-    id: `speaker-${index + 1}`,
+  const id = `speaker-${index + 1}`;
+  const processors = {
+    gain: new Gain({ id: `${id}-gain`, db: 0 }),
+    delay: new Delay({ id: `${id}-delay`, ms: 0 }),
+    polarity: new Polarity({ id: `${id}-polarity`, inverted: false }),
+    highPass: new HighPassFilter({ id: `${id}-hpf`, enabled: false, family: 'Butterworth', order: 2, frequency: 20 }),
+    lowPass: new LowPassFilter({ id: `${id}-lpf`, enabled: false, family: 'LinkwitzRiley', order: 4, frequency: 80 }),
+    peq: new ParametricEQ({ id: `${id}-peq`, enabled: false, frequency: 60, gain: 0, q: 1 }),
+  };
+  const model = new Speaker({
+    id,
     name: `Speaker ${index + 1}`,
     position: position ?? [1 + (index % 4) * 1.1, .22, .8 + Math.floor(index / 4) * 1.1],
-    gainDb: 0,
-    delayMs: 0,
-    polarityInverted: false,
+    signalChain: new SignalChain({ processors: Object.values(processors) }),
     enabled: true,
-  };
+  });
+  model.processors = processors;
   const node = new SpeakerNode({ id: `${model.id}-node`, name: model.name, position: model.position });
   model.node = node;
   node.on('positionChanged', event => {
-    model.position = [...event.position];
-    fieldView.invalidate();
-    updateSpeakerList();
+    model.setPosition(event.position);
+    invalidateField();
+    updateSpeakerCard(model);
   });
   speakerModels.push(model);
   speakerNodes.push(node);
   scene.add(node);
-  fieldView.invalidate();
-  updateSpeakerList();
+  buildSpeakerCard(model);
+  invalidateField();
   return model;
 }
 
@@ -116,6 +198,7 @@ gui.mount(sidebar, [
 
 addSpeaker([1.2, .22, 1]);
 addSpeaker([4.8, .22, 1]);
+globalThis.acousticMateStarted = true;
 
 globalThis.addEventListener('beforeunload', () => {
   drag.destroy();

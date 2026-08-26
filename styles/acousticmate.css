@@ -17,9 +17,19 @@ html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .hint { color: var(--ui-muted); font-size: .86rem; line-height: 1.4; }
 [data-role='viewport'] { display: block; width: 100%; height: 100%; min-width: 0; touch-action: none; cursor: crosshair; }
 .speaker-list { margin-top: .4rem; }
-.speaker-row { display: grid; grid-template-columns: 1fr auto; gap: .25rem .65rem; padding: .65rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: var(--ui-control-bg); }
-.speaker-row span { grid-column: 1 / -1; color: var(--ui-muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
-.speaker-row button { grid-column: 2; grid-row: 1; padding: .25rem .55rem; }
+.speaker-card { display: grid; gap: .3rem; padding: .65rem; border: 1px solid var(--ui-border); border-radius: var(--ui-radius); background: var(--ui-control-bg); }
+.speaker-heading { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+.speaker-heading button { padding: .25rem .55rem; }
+.coordinates { color: var(--ui-muted); font-size: .78rem; font-variant-numeric: tabular-nums; }
+.signal-chain { margin-top: .2rem; border-top: 1px solid var(--ui-border); padding-top: .45rem; }
+.signal-chain summary { color: var(--ui-focus); cursor: pointer; font-size: .82rem; }
+.signal-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; margin-top: .6rem; }
+.compact-field { min-width: 0; font-size: .75rem; }
+.compact-field input, .compact-field select { width: 100%; min-width: 0; padding: .35rem .4rem; }
+.check-field { display: flex; align-items: center; justify-content: space-between; grid-column: 1 / -1; font-size: .78rem; }
+.processor-group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem; grid-column: 1 / -1; min-width: 0; margin: 0; border: 1px solid var(--ui-border); border-radius: calc(var(--ui-radius) * .7); padding: .55rem; }
+.processor-group legend { color: var(--ui-fg); font-size: .78rem; }
+.processor-group .compact-field:last-child:nth-child(4) { grid-column: 1 / -1; }
 
 @media (max-width: 720px) {
   .app-shell { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
