@@ -1,4 +1,4 @@
-# AcousticMate Contracts v0.5
+# AcousticMate Contracts v0.6
 
 AcousticMate is a browser-based JavaScript/S3D room-acoustics tool focused initially on low-frequency room modes, loudspeaker/subwoofer placement, crossover/filter configuration and 3D visualization.
 
@@ -101,6 +101,8 @@ The visualization supports:
 - 3D slices
 - samples
 - later volume rendering / isosurfaces
+
+The original 2D heatmap remains available. The V1 3D view adds independently positioned XZ, XY and YZ field slices with one shared color scale. Users can show the 2D view, the 3D view or both together. A single floor-level heatmap is not considered a complete 3D field view.
 
 `FrequencyRangeController` is reusable state in `S3D/domains/acoustics`. It owns frequency-range semantics, while AcousticMate decides how the selected range is interpreted in its calculations.
 

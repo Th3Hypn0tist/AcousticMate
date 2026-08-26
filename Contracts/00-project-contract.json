@@ -1,6 +1,6 @@
 {
   "name": "AcousticMate",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "runtime": "browser",
   "language": "JavaScript",
   "renderer": "S3D",
@@ -19,7 +19,10 @@
     "speaker count is not limited by architecture",
     "multi-source acoustic summation is phase-aware",
     "frequency range selection is a first-class visualization control",
-    "speaker position changes update the acoustic visualization continuously"
+    "speaker position changes update the acoustic visualization continuously",
+    "speaker placement is three-dimensional and includes height",
+    "a 3D field view samples the room volume rather than only the floor plane",
+    "new field views are additive and the original 2D heatmap remains available"
   ],
   "coordinateSystem": {
     "x": "horizontal",

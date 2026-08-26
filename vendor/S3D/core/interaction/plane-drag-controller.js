@@ -6,31 +6,56 @@ function intersectPlane(ray, planeY) {
   return ray.origin.map((value, index) => value + ray.direction[index] * distance);
 }
 
+function distanceFromRay(ray, point) {
+  const offset = point.map((value, index) => value - ray.origin[index]);
+  const along = offset.reduce((sum, value, index) => sum + value * ray.direction[index], 0);
+  if (along < 0) return { distance: Infinity, along };
+  const closest = ray.origin.map((value, index) => value + ray.direction[index] * along);
+  return { distance: Math.hypot(...point.map((value, index) => value - closest[index])), along };
+}
+
+function resolveBound(value, object, fallback) {
+  const resolved = typeof value === 'function' ? value(object) : value;
+  return Number.isFinite(resolved) ? Number(resolved) : fallback;
+}
+
 class PlaneDragController {
-  constructor(canvas, camera, { candidates = () => [], planeY = 0, defaultRadius = .35 } = {}) {
+  constructor(canvas, camera, { candidates = () => [], planeY = 0, defaultRadius = .35, vertical = true, minY = -Infinity, maxY = Infinity } = {}) {
     this.canvas = canvas;
     this.camera = camera;
     this.candidates = candidates;
     this.planeY = planeY;
     this.defaultRadius = defaultRadius;
+    this.vertical = Boolean(vertical);
+    this.minY = minY;
+    this.maxY = maxY;
     this.drag = null;
     this.onPointerDown = event => {
       if (event.button !== 0) return;
-      const point = this.point(event);
-      if (!point) return;
+      const rect = this.canvas.getBoundingClientRect();
+      const ray = this.camera.ray(event.clientX, event.clientY, rect);
       let best = null;
       for (const object of this.candidates()) {
         if (!object || object.visible === false || object.draggable === false) continue;
         const position = object.worldPosition?.() ?? object.position;
-        const distance = Math.hypot(position[0] - point[0], position[2] - point[2]);
         const radius = Number(object.dragRadius ?? this.defaultRadius);
-        if (distance <= radius && (!best || distance < best.distance)) best = { object, distance, position };
+        const hit = distanceFromRay(ray, position);
+        if (hit.distance <= radius && (!best || hit.along < best.along)) best = { object, ...hit, position };
       }
       if (!best) return;
+      const vertical = this.vertical && event.shiftKey;
+      const point = intersectPlane(ray, best.position[1]);
+      if (!vertical && !point) return;
+      const worldPerPixel = 2 * Math.max(best.along, .001) * Math.tan(this.camera.fov * Math.PI / 360) / Math.max(1, rect.height);
       this.drag = {
         id: event.pointerId,
         object: best.object,
-        offset: [best.position[0] - point[0], 0, best.position[2] - point[2]],
+        mode: vertical ? 'y' : 'xz',
+        planeY: best.position[1],
+        offset: point ? [best.position[0] - point[0], 0, best.position[2] - point[2]] : [0, 0, 0],
+        startClientY: event.clientY,
+        startPosition: [...best.object.position],
+        worldPerPixel,
       };
       canvas.setPointerCapture(event.pointerId);
       best.object.emit?.('dragStart', { position: [...best.object.position] });
@@ -38,10 +63,18 @@ class PlaneDragController {
     };
     this.onPointerMove = event => {
       if (!this.drag || event.pointerId !== this.drag.id) return;
-      const point = this.point(event);
-      if (!point) return;
       const object = this.drag.object;
-      const position = [point[0] + this.drag.offset[0], object.position[1], point[2] + this.drag.offset[2]];
+      let position;
+      if (this.drag.mode === 'y') {
+        const low = resolveBound(this.minY, object, -Infinity);
+        const high = resolveBound(this.maxY, object, Infinity);
+        const y = Math.max(low, Math.min(high, this.drag.startPosition[1] - (event.clientY - this.drag.startClientY) * this.drag.worldPerPixel));
+        position = [this.drag.startPosition[0], y, this.drag.startPosition[2]];
+      } else {
+        const point = this.point(event, this.drag.planeY);
+        if (!point) return;
+        position = [point[0] + this.drag.offset[0], object.position[1], point[2] + this.drag.offset[2]];
+      }
       if (typeof object.setPosition === 'function') object.setPosition(position);
       else object.position = position;
       object.emit?.('drag', { position: [...position] });
@@ -60,8 +93,8 @@ class PlaneDragController {
     canvas.addEventListener('pointercancel', this.onPointerUp);
   }
 
-  point(event) {
-    return intersectPlane(this.camera.ray(event.clientX, event.clientY, this.canvas.getBoundingClientRect()), this.planeY);
+  point(event, planeY = this.planeY) {
+    return intersectPlane(this.camera.ray(event.clientX, event.clientY, this.canvas.getBoundingClientRect()), planeY);
   }
 
   destroy() {
@@ -73,4 +106,4 @@ class PlaneDragController {
   }
 }
 
-export { PlaneDragController, intersectPlane };
+export { PlaneDragController, distanceFromRay, intersectPlane };
