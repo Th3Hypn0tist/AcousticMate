@@ -1,0 +1,33 @@
+{
+  "module": "ImageReferenceLayer",
+  "scope": "S3D",
+  "instantiable": true,
+  "inputs": {
+    "image": "HTMLImageElement | File | URL",
+    "opacity": "number",
+    "transform": {
+      "position": "[x,z]",
+      "rotation": "number",
+      "scale": "[x,z]"
+    }
+  },
+  "outputs": {
+    "imageToLocal": "function",
+    "localToImage": "function"
+  },
+  "operations": [
+    "setImage",
+    "setOpacity",
+    "translate",
+    "rotate",
+    "scale",
+    "show",
+    "hide",
+    "destroy"
+  ],
+  "mustNot": [
+    "create room geometry",
+    "interpret walls",
+    "perform acoustic calculations"
+  ]
+}

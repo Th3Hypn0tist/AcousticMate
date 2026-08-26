@@ -1,0 +1,24 @@
+{
+  "module": "FrameworkBoundaries",
+  "scope": "Project",
+  "dependencies": [
+    "AcousticMate -> WebGUI",
+    "AcousticMate -> S3D/core",
+    "AcousticMate -> S3D/domains/acoustics",
+    "S3D/domains/* -> S3D/core"
+  ],
+  "forbiddenDependencies": [
+    "WebGUI -> S3D",
+    "WebGUI -> AcousticMate",
+    "S3D/core -> S3D/domains/*",
+    "S3D/core -> AcousticMate",
+    "S3D/domains/* -> AcousticMate"
+  ],
+  "ownershipRules": [
+    "concept-free DOM structure belongs in WebGUI",
+    "domain-independent structural 3D functionality belongs in S3D/core",
+    "reusable instantiable acoustic functionality may belong in S3D/domains/acoustics",
+    "AcousticMate-specific project state, workflows and orchestration remain in AcousticMate",
+    "a reusable module is implemented once in its owning framework and consumed without copying"
+  ]
+}

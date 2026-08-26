@@ -1,0 +1,39 @@
+{
+  "module": "PolygonEditor",
+  "scope": "S3D",
+  "instantiable": true,
+  "plane": "XZ",
+  "data": {
+    "vertices": [
+      {
+        "id": "string",
+        "x": "number",
+        "z": "number"
+      }
+    ],
+    "closed": "boolean"
+  },
+  "operations": [
+    "addVertex",
+    "moveVertex",
+    "removeVertex",
+    "insertVertex",
+    "closePolygon",
+    "openPolygon",
+    "select",
+    "clearSelection",
+    "undo",
+    "redo"
+  ],
+  "events": [
+    "geometryChanged",
+    "selectionChanged",
+    "polygonClosed",
+    "polygonOpened"
+  ],
+  "invariants": [
+    "vertex ids remain stable when vertices move",
+    "vertex order defines polygon topology",
+    "editor does not silently reorder vertices"
+  ]
+}

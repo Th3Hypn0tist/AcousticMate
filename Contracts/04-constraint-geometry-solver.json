@@ -1,0 +1,32 @@
+{
+  "module": "ConstraintGeometrySolver",
+  "scope": "S3D",
+  "instantiable": true,
+  "inputs": {
+    "polygon": "Polygon",
+    "measurements": "Measurement[]"
+  },
+  "outputs": {
+    "polygon": "SolvedPolygon",
+    "measurements": "SolvedMeasurement[]",
+    "diagnostics": "SolverDiagnostics"
+  },
+  "objective": [
+    "fit measured distances",
+    "preserve source polygon shape where unconstrained",
+    "infer unconstrained dimensions",
+    "minimize total geometric error"
+  ],
+  "priority": [
+    "explicit measured dimensions",
+    "cross-room dimensions",
+    "source image geometry"
+  ],
+  "invariants": [
+    "polygon topology does not change",
+    "vertex ids do not change",
+    "missing dimensions may be inferred",
+    "conflicting measurements must be reported",
+    "conflicting measurements must not be silently discarded"
+  ]
+}

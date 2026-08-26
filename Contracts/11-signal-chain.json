@@ -1,0 +1,26 @@
+{
+  "module": "SignalChain",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "data": {
+    "processors": "SignalProcessor[]"
+  },
+  "operations": [
+    "add",
+    "insert",
+    "remove",
+    "move",
+    "enable",
+    "disable",
+    "clear",
+    "evaluateFrequencyResponse"
+  ],
+  "outputs": {
+    "transferFunction": "complex function of frequency"
+  },
+  "invariants": [
+    "processor order is significant",
+    "processors are independently instantiable",
+    "disabled processors contribute identity transfer"
+  ]
+}

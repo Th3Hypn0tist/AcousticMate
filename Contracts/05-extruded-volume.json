@@ -1,0 +1,25 @@
+{
+  "module": "ExtrudedVolume",
+  "scope": "S3D",
+  "instantiable": true,
+  "inputs": {
+    "polygon": "Polygon",
+    "height": "number",
+    "baseY": "number"
+  },
+  "outputs": {
+    "mesh": "S3D geometry",
+    "volume": "VolumeGeometry",
+    "surfaces": {
+      "floor": "Surface",
+      "ceiling": "Surface",
+      "walls": "Surface[]"
+    }
+  },
+  "operations": [
+    "setPolygon",
+    "setHeight",
+    "rebuild",
+    "destroy"
+  ]
+}

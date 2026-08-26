@@ -1,0 +1,24 @@
+{
+  "module": "Measurement",
+  "scope": "S3D",
+  "instantiable": true,
+  "type": "distance",
+  "anchors": [
+    {
+      "type": "vertex | edge | free",
+      "target": "string | null",
+      "t": "number | null",
+      "position": "[x,z] | null"
+    },
+    {
+      "type": "vertex | edge | free",
+      "target": "string | null",
+      "t": "number | null",
+      "position": "[x,z] | null"
+    }
+  ],
+  "value": "number",
+  "unit": "m",
+  "confidence": "0..1",
+  "source": "measured | drawing | inferred"
+}

@@ -1,0 +1,22 @@
+{
+  "module": "CombinedAcousticField",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "inputs": {
+    "domain": "AcousticDomain",
+    "modes": "AcousticMode[]",
+    "speakers": "Speaker[]",
+    "frequencyRange": "[minHz,maxHz]"
+  },
+  "outputs": {
+    "fieldAtFrequency": "function(frequencyHz) => ScalarField",
+    "frequencyField": "FrequencyField"
+  },
+  "summation": "complex",
+  "rules": [
+    "speaker contributions are summed as complex pressure, not dB magnitudes",
+    "gain, delay, polarity, crossover filters and speaker response are applied before summation",
+    "disabled speakers do not contribute",
+    "frequency-range visualization must be derived from the same underlying phase-aware field"
+  ]
+}

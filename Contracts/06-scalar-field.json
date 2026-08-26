@@ -1,0 +1,10 @@
+{
+  "module": "ScalarField",
+  "scope": "S3D",
+  "contract": {
+    "sample": "function(x,y,z) => number | complex",
+    "bounds": "Bounds3D",
+    "range": "[min,max]",
+    "frequency": "number | null"
+  }
+}

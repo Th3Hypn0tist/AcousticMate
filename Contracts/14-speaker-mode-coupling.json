@@ -1,0 +1,18 @@
+{
+  "module": "SpeakerModeCoupling",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "inputs": {
+    "speaker": "Speaker",
+    "mode": "AcousticMode"
+  },
+  "outputs": {
+    "spatialCoupling": "complex | number",
+    "responseGain": "complex",
+    "combinedExcitation": "complex"
+  },
+  "rules": [
+    "speaker position affects modal excitation",
+    "signal-chain phase must be preserved"
+  ]
+}
