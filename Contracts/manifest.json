@@ -32,5 +32,6 @@
     "README.md",
     "manifest.json"
   ],
-  "status": "active-implementation"
+  "status": "v1-contract-surface-implemented",
+  "verification": "runtime-and-browser-regression-pending"
 }
