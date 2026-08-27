@@ -15,6 +15,18 @@ test('AcousticDomain adapts a rectangular room without mixing rendering semantic
   assert.deepEqual(domain.bounds.max, [6, 2.7, 4.5]);
 });
 
+test('AcousticDomain does not infer rectangular physics from an arbitrary polygon bounding box', () => {
+  const volumeGeometry = {
+    volume: {
+      height: 2.7,
+      polygon: { vertices: [{ x: 0, z: 0 }, { x: 6, z: 0 }, { x: 5, z: 4 }, { x: 0, z: 4.5 }] },
+    },
+  };
+  const domain = new AcousticDomain({ volumeGeometry });
+  assert.equal(domain.geometryType, 'arbitrary');
+  assert.deepEqual(domain.dimensions, { width: 6, height: 2.7, depth: 4.5 });
+});
+
 test('SpeakerModeCoupling exposes phase-aware contract outputs', () => {
   const speaker = {
     position: [1, .5, 1],
