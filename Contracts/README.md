@@ -1,4 +1,4 @@
-# AcousticMate Contracts v0.8
+# AcousticMate Contracts v0.9
 
 AcousticMate is a browser-based JavaScript/S3D room-acoustics tool covering low-frequency room modes, loudspeaker/subwoofer placement, crossover/filter configuration, phase-aware field calculation and 2D/3D visualization. The architecture is not restricted to home use: studio, installation and PA loudspeakers are valid first-class use cases.
 
@@ -9,13 +9,13 @@ WebGUI:
 concept-free minimalist DOM structure and rendering
 
 S3D/core:
-domain-independent structural 3D runtime
+domain-independent structural 3D runtime and canonical primitive geometry
 
 S3D/domains/acoustics:
 reusable instantiable acoustic structures and visualizations
 
 AcousticMate:
-application-specific acoustic calculations, project state and orchestration
+application-specific acoustic calculations, boundary/material semantics, project state and orchestration
 
 App:
 instances + wiring + WebGUI composition
@@ -29,6 +29,7 @@ instances + wiring + WebGUI composition
 - AcousticMate physics must not depend on the S3D renderer.
 - App may depend on WebGUI, S3D core, S3D domains and AcousticMate modules.
 - Reusable stateful components are instances, never global singletons.
+- S3D `Primitive` is the canonical geometry abstraction for physical objects. AcousticMate must not define a parallel primitive type system.
 
 ## Room input and Room Editor
 
@@ -72,6 +73,51 @@ Room openings currently support:
 
 Openings must remain inside their owning wall surface.
 
+## Acoustic objects, absorbers and diffusors
+
+Physical acoustic-treatment objects reuse ordinary instantiated S3D primitives. AcousticMate does not define `AbsorberMesh`, `DiffuserMesh`, `BassTrapMesh` or another parallel geometry hierarchy.
+
+```text
+AcousticObject
+  geometry      -> S3D Primitive instance
+  acousticModel -> AcousticBoundaryModel
+  materialProfile
+  attachment    -> optional RoomSurfaceAttachment
+```
+
+Any primitive supported by S3D may be used. The initial treatment-object library only requires finite-volume primitives such as `Box` and `Cylinder`. A zero-thickness `Plane` is not required for physical acoustic objects because real objects have thickness/volume.
+
+Examples:
+
+```text
+wall absorber
+  geometry = Box(...)
+  acousticModel = absorptive
+
+cylindrical bass trap
+  geometry = Cylinder(...)
+  acousticModel = absorptive | impedance
+
+diffuser
+  geometry = Box(...)
+  acousticModel = scattering
+```
+
+Render geometry and acoustic behavior are separate concerns. Solver code must consume the object's acoustic model / resulting boundary patch, not infer physics from the primitive name.
+
+An opening is different: it is a bounded patch of an existing room surface and therefore remains a `BoundaryPatch`, not a finite-volume `AcousticObject`.
+
+Supported boundary-model semantics are:
+- `rigid`
+- `open`
+- `absorptive`
+- `scattering`
+- `impedance`
+
+An attached absorber or diffuser may bind its acoustic behavior to the bounded room-surface region it covers. The current rectangular modal solver may approximate absorptive treatment as mode-dependent loss over that area. It must not claim exact diffuser scattering; exact scattering/impedance behavior may require later numerical or reflection/scattering solvers.
+
+AcousticMate may allow users to create, place and inspect treatment objects, but automatic treatment-placement recommendations are outside the current contract unless explicitly added later.
+
 ## Speaker library and models
 
 `SpeakerModel` is reusable loudspeaker/subwoofer data. It may represent home, studio, installation or PA products.
@@ -102,14 +148,7 @@ Speaker nodes show a billboard identifier and a forward-axis indicator. The visu
 
 ## Speaker sets
 
-`SpeakerSet` is a structural group of real `Speaker` instances. Typical set types include:
-
-- generic
-- line-array
-- cluster
-- sub-array
-- stack
-- distributed
+`SpeakerSet` is a structural group of real `Speaker` instances. Typical set types include generic, line-array, cluster, sub-array, stack and distributed.
 
 Each member has a local position and local orientation relative to the set. The set owns one parent world transform:
 
@@ -122,13 +161,6 @@ Acoustic calculation still evaluates the individual speakers; the set is not a r
 ### Speaker Set Editor
 
 A dedicated `SpeakerSetEditor` edits the member-local structure before returning to the main visualizer. It supports 3D preview, add/remove, XYZ position, orientation, duplicate and type-specific helpers.
-
-Examples:
-
-- line array: order, spacing, splay angles, array tilt, curvature
-- cluster: free member positions/orientations
-- sub array: spacing, arc/radius and member processing trims
-- generic: free member transforms
 
 In the main visualizer the complete set may be moved/rotated as one manipulation target while individual member transforms remain intact.
 
@@ -189,10 +221,6 @@ The 2D heatmap remains available. The 3D view uses independently configurable XZ
 
 The visualization is intended to expose spatial pressure maxima, minima and problematic regions directly.
 
-## Absorbers and diffusors
-
-AcousticMate does **not** model absorbers or diffusors. It does not create them, place them, recommend locations automatically or simulate material behavior. The field visualization only helps the user inspect the room and decide manually.
-
 ## Start scope
 
 The contracts do not yet require:
@@ -201,10 +229,11 @@ The contracts do not yet require:
 - volumetric holes inside room geometry
 - exterior-room solving through open doorways
 - exact mixed-boundary numerical eigenmode solving
+- exact diffuser scattering simulation
 - reflection / ray-tracing solver
 - FIR processing
 - manufacturer-specific DSP formats
-- acoustic-treatment modelling
+- automatic acoustic-treatment placement recommendations
 - nested SpeakerSets
 
 These may be added later as separate modules.
