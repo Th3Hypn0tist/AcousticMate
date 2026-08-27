@@ -20,6 +20,12 @@ function dimensionsFromVolume(volumeGeometry) {
   return null;
 }
 
+function inferredGeometryType(volumeGeometry) {
+  if (volumeGeometry?.geometryType) return String(volumeGeometry.geometryType);
+  if (volumeGeometry?.type === 'rectangular-volume') return 'rectangular';
+  return 'arbitrary';
+}
+
 class AcousticDomain {
   constructor({ volumeGeometry, boundaryConditions = null, acousticObjects = null, geometryType = null, metadata = {} } = {}) {
     if (!volumeGeometry) throw new Error('AcousticDomain requires volumeGeometry');
@@ -28,7 +34,7 @@ class AcousticDomain {
     this.acousticObjects = acousticObjects ? [...acousticObjects] : [];
     this.dimensions = dimensionsFromVolume(volumeGeometry);
     this.bounds = volumeGeometry.bounds ?? boundsFromDimensions(this.dimensions);
-    this.geometryType = geometryType ?? (this.dimensions ? 'rectangular' : 'arbitrary');
+    this.geometryType = geometryType ?? inferredGeometryType(volumeGeometry);
     this.metadata = { ...metadata };
   }
 
@@ -48,4 +54,4 @@ class AcousticDomain {
   solverDomain() { return this; }
 }
 
-export { AcousticDomain, boundsFromDimensions, dimensionsFromVolume };
+export { AcousticDomain, boundsFromDimensions, dimensionsFromVolume, inferredGeometryType };
