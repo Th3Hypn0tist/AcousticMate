@@ -3,33 +3,20 @@ import { RectangularRoomField } from './rectangular-room-field.js';
 function uniqueSpeakers(speakers = [], speakerSets = []) {
   const values = [];
   const seen = new Set();
-  const add = speaker => {
-    if (!speaker || seen.has(speaker)) return;
-    seen.add(speaker);
-    values.push(speaker);
-  };
+  const add = speaker => { if (!speaker || seen.has(speaker)) return; seen.add(speaker); values.push(speaker); };
   for (const speaker of speakers) add(speaker);
   for (const set of speakerSets) for (const member of set?.members ?? []) add(member.speaker);
   return values;
 }
 
 class FrequencySliceField {
-  constructor({ owner, frequencyHz } = {}) {
-    this.owner = owner;
-    this.frequency = Number(frequencyHz);
-    this.bounds = owner.domain.bounds;
-    this.range = [0, Infinity];
-  }
+  constructor({ owner, frequencyHz } = {}) { this.owner = owner; this.frequency = Number(frequencyHz); this.bounds = owner.domain.bounds; this.range = [0, Infinity]; }
   sample(x, y, z) { return this.owner.roomField.sampleAtFrequency(x, y, z, this.frequency); }
   sampleComplex(x, y, z) { return this.owner.roomField.sampleComplexAtFrequency(x, y, z, this.frequency); }
 }
 
 class PhaseAwareFrequencyField {
-  constructor(owner) {
-    this.owner = owner;
-    this.bounds = owner.domain.bounds;
-    this.range = owner.frequencyRange;
-  }
+  constructor(owner) { this.owner = owner; this.bounds = owner.domain.bounds; this.range = owner.frequencyRange; }
   sample(x, y, z, frequencyHz) { return this.owner.roomField.sampleAtFrequency(x, y, z, frequencyHz); }
   sampleComplex(x, y, z, frequencyHz) { return this.owner.roomField.sampleComplexAtFrequency(x, y, z, frequencyHz); }
 }
@@ -61,7 +48,7 @@ class CombinedAcousticField {
   invalidate() { this.roomField.invalidate(); return this; }
   setFrequencyRange(minHz, maxHz) {
     minHz = Number(minHz); maxHz = Number(maxHz);
-    if (!Number.isFinite(minHz) || !Number.isFinite(maxHz) || minHz < 0 || maxHz <= minHz) throw new Error('CombinedAcousticField range requires 0 <= min < max');
+    if (!Number.isFinite(minHz) || !Number.isFinite(maxHz) || minHz < 0 || maxHz < minHz) throw new Error('CombinedAcousticField range requires 0 <= min <= max');
     this.frequencyRange = [minHz, maxHz];
     this.frequencyField.range = this.frequencyRange;
     if (Math.abs(this.roomField.maxFrequency - maxHz) > 1e-9) { this.roomField.maxFrequency = maxHz; this.roomField.rebuildModes(); }
