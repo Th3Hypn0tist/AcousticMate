@@ -20,6 +20,11 @@ import { EventItem } from './objects/event_item.js';
 import { Events } from './objects/events.js';
 import { Pulse } from './objects/pulse.js';
 import { Highlight } from './objects/highlight.js';
+import { ImageReferenceLayer } from './geometry/image-reference-layer.js';
+import { PolygonEditor, polygonEdges } from './geometry/polygon-editor.js';
+import { Measurement, resolveAnchor } from './geometry/measurement.js';
+import { ConstraintGeometrySolver, residuals } from './geometry/constraint-geometry-solver.js';
+import { ExtrudedVolume } from './geometry/extruded-volume.js';
 
 const S3D = Object.freeze({
   version: S3D_VERSION,
@@ -52,6 +57,11 @@ const S3D = Object.freeze({
   Events,
   Pulse,
   Highlight,
+  ImageReferenceLayer,
+  PolygonEditor,
+  Measurement,
+  ConstraintGeometrySolver,
+  ExtrudedVolume,
 });
 
 export {
@@ -86,4 +96,12 @@ export {
   Events,
   Pulse,
   Highlight,
+  ImageReferenceLayer,
+  PolygonEditor,
+  polygonEdges,
+  Measurement,
+  resolveAnchor,
+  ConstraintGeometrySolver,
+  residuals,
+  ExtrudedVolume,
 };
