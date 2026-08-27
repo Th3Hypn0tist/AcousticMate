@@ -13,13 +13,19 @@ class RoomGeometryWorkflow {
   constructor({ room } = {}) {
     if (!room) throw new Error('RoomGeometryWorkflow requires a room');
     this.room = room;
-    this.referenceLayer = new ImageReferenceLayer();
+    this.referenceLayer = new ImageReferenceLayer({ id: 'room-reference-layer', y: .002, opacity: .45 });
+    this.referenceName = null;
     this.polygonEditor = new PolygonEditor({ id: 'room-polygon-editor', vertices: rectangleVertices(room.dimensions), closed: true, y: .01 });
     this.measurements = [];
     this.solver = new ConstraintGeometrySolver();
     this.volume = new ExtrudedVolume({ id: 'room-extruded-volume', polygon: this.polygonEditor, height: room.dimensions.height, baseY: 0 });
     this.lastSolve = null;
     this.listeners = new Map();
+    const polygonDraw = this.polygonEditor.draw.bind(this.polygonEditor);
+    this.polygonEditor.draw = (renderer, context = {}) => {
+      this.referenceLayer.draw(renderer, context);
+      polygonDraw(renderer, context);
+    };
     this.syncMeasurementsFromRoom();
     this.room.on('geometryChanged', () => this.syncFromRoom());
     this.polygonEditor.on('geometryChanged', () => this.emit('geometryChanged', { polygon: this.polygonEditor.toPolygon() }));
@@ -46,7 +52,35 @@ class RoomGeometryWorkflow {
     return this;
   }
 
-  setReferenceImage(image) { this.referenceLayer.setImage(image); this.emit('referenceChanged', { image }); return this; }
+  fitReference(width, height) {
+    width = Number(width);
+    height = Number(height);
+    if (!(width > 0 && height > 0)) return this;
+    this.referenceLayer.setTransform({
+      position: [0, 0],
+      rotation: 0,
+      scale: [this.room.dimensions.width / width, this.room.dimensions.depth / height],
+    });
+    return this;
+  }
+
+  setReferenceImage(image) {
+    this.referenceName = typeof image?.name === 'string' ? image.name : this.referenceName;
+    this.referenceLayer.setImage(image);
+    const width = Number(image?.naturalWidth ?? image?.width ?? 0);
+    const height = Number(image?.naturalHeight ?? image?.height ?? 0);
+    if (width > 0 && height > 0) this.fitReference(width, height);
+    else if (typeof Blob !== 'undefined' && image instanceof Blob && typeof createImageBitmap === 'function') {
+      createImageBitmap(image).then(bitmap => {
+        this.referenceLayer.setImage(bitmap);
+        this.fitReference(bitmap.width, bitmap.height);
+        this.emit('referenceChanged', { image: bitmap, name: this.referenceName, fitted: true });
+      }).catch(error => this.emit('referenceError', { error }));
+    }
+    this.emit('referenceChanged', { image, name: this.referenceName });
+    return this;
+  }
+
   setReferenceOpacity(value) { this.referenceLayer.setOpacity(value); this.emit('referenceChanged', { opacity: this.referenceLayer.opacity }); return this; }
 
   setMeasurement(id, value, options = {}) {
