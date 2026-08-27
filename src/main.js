@@ -2,6 +2,8 @@ import { Scene, Box, PerspectiveCamera, Viewport, OrbitControls, PlaneDragContro
 import { FrequencyRangeController, OrthogonalFieldSlices, SampledFieldPlane, SpeakerNode } from '../vendor/S3D/domains/acoustics/index.js';
 import { WebGUI } from '../vendor/WebGUI/webgui.js';
 import { RectangularRoomField } from './rectangular-room-field.js';
+import { RectangularRoom } from './room.js';
+import { RoomEditor } from './room-editor.js';
 import { Speaker } from './speaker.js';
 import { SpeakerLibrary } from './speaker-library.js';
 import { SpeakerSet } from './speaker-set.js';
@@ -17,11 +19,13 @@ canvas.dataset.role = 'viewport';
 const sidebar = gui.stack([], { className: 'sidebar' });
 const mainPanel = gui.stack([], { className: 'workspace-panel' });
 const setEditorPanel = gui.stack([], { className: 'workspace-panel set-editor-panel', hidden: true });
-sidebar.append(mainPanel, setEditorPanel);
+const roomEditorPanel = gui.stack([], { className: 'workspace-panel room-editor-panel', hidden: true });
+sidebar.append(mainPanel, setEditorPanel, roomEditorPanel);
 const shell = gui.h('div', { className: 'app-shell' }, [sidebar, canvas]);
 root.append(shell);
 
-const dimensions = { width: 6, height: 2.7, depth: 4.5 };
+const room = new RectangularRoom({ width: 6, height: 2.7, depth: 4.5 });
+const dimensions = room.dimensions;
 const frequency = new FrequencyRangeController({ minHz: 20, maxHz: 140, selectedHz: 58, mode: 'single' });
 const speakers = [];
 const speakerNodes = [];
@@ -31,7 +35,7 @@ let speakerSequence = 0;
 let speakerSetSequence = 0;
 const scene = new Scene();
 const speakerLibrary = new SpeakerLibrary();
-const editorState = { set: null, camera: null };
+const editorState = { set: null, room: false, camera: null };
 
 async function loadSpeakerLibrary() {
   const manifestUrl = new URL('../speaker-library/manifest.json', import.meta.url);
@@ -65,6 +69,7 @@ const editorOrigin = scene.add(new Box({
 
 const roomField = new RectangularRoomField({
   dimensions,
+  openings: room.openings,
   speakers,
   frequency: frequency.selectedHz,
   maxFrequency: frequency.maxHz,
@@ -100,7 +105,7 @@ function activeFieldViews() {
 function setFieldViewMode(mode) {
   if (!['2d', '3d', 'both'].includes(mode)) throw new Error(`Unknown field view mode: ${mode}`);
   fieldViewMode = mode;
-  if (editorState.set) return;
+  if (editorState.set || editorState.room) return;
   field2DView.visible = mode !== '3d';
   field3DView.visible = mode !== '2d';
   for (const view of activeFieldViews()) view.invalidate();
@@ -108,7 +113,7 @@ function setFieldViewMode(mode) {
 
 function invalidateField() {
   roomField.invalidate();
-  if (!editorState.set) for (const view of activeFieldViews()) view.invalidate();
+  if (!editorState.set && !editorState.room) for (const view of activeFieldViews()) view.invalidate();
 }
 
 const camera = new PerspectiveCamera({
@@ -121,6 +126,7 @@ const viewport = new Viewport(canvas, { camera }).start(scene);
 const orbit = new OrbitControls(canvas, camera);
 
 function manipulationCandidates() {
+  if (editorState.room) return [];
   if (editorState.set) return editorState.set.members.map(member => member.speaker.node);
   return [
     ...speakerNodes.filter(node => !node.model?.parentSet),
@@ -142,6 +148,11 @@ const frequencySlider = gui.input({
 });
 const speakerList = gui.stack([], { className: 'speaker-list' });
 const setList = gui.stack([], { className: 'speaker-list set-list' });
+const roomSummary = gui.h('span', { className: 'coordinates' });
+
+function updateRoomSummary() {
+  roomSummary.textContent = `${dimensions.width.toFixed(2)} × ${dimensions.depth.toFixed(2)} × ${dimensions.height.toFixed(2)} m · ${room.openings.length} openings`;
+}
 
 function numberControl(label, value, { min, max, step = .1, update, invalidate = true } = {}) {
   const input = gui.input({
@@ -285,8 +296,8 @@ function syncSpeakerNode(speaker) {
     return;
   }
   node.setPosition(speaker.position, { emit: false });
-  node.visible = !editedSet;
-  node.draggable = !speaker.parentSet && !editedSet;
+  node.visible = !editedSet && !editorState.room;
+  node.draggable = !speaker.parentSet && !editedSet && !editorState.room;
 }
 
 function updateSpeakerCard(speaker) {
@@ -419,7 +430,7 @@ function createSpeakerSet(type = 'generic') {
   node.model = set;
   set.node = node;
   node.on('positionChanged', event => {
-    if (editorState.set) return;
+    if (editorState.set || editorState.room) return;
     set.setPosition(event.position);
     updateSetCard(set);
     invalidateField();
@@ -443,11 +454,12 @@ function createSpeakerSet(type = 'generic') {
 
 function refreshSceneMode() {
   const editedSet = editorState.set;
+  const editingRoom = editorState.room;
   roomOutline.visible = !editedSet;
   editorOrigin.visible = Boolean(editedSet);
-  field2DView.visible = !editedSet && fieldViewMode !== '3d';
-  field3DView.visible = !editedSet && fieldViewMode !== '2d';
-  for (const set of speakerSets) set.node.visible = !editedSet;
+  field2DView.visible = !editedSet && !editingRoom && fieldViewMode !== '3d';
+  field3DView.visible = !editedSet && !editingRoom && fieldViewMode !== '2d';
+  for (const set of speakerSets) set.node.visible = !editedSet && !editingRoom;
   for (const speaker of speakers) syncSpeakerNode(speaker);
 }
 
@@ -549,11 +561,12 @@ function renderSetEditor(set = editorState.set) {
 }
 
 function openSetEditor(set) {
-  if (editorState.set === set) return;
+  if (editorState.set === set || editorState.room) return;
   editorState.camera = { position: [...camera.position], target: [...camera.target] };
   editorState.set = set;
   mainPanel.hidden = true;
   setEditorPanel.hidden = false;
+  roomEditorPanel.hidden = true;
   camera.position = [3.6, 2.8, 4.8];
   camera.target = [0, 0, 0];
   renderSetEditor(set);
@@ -600,14 +613,53 @@ function standaloneSpeakerControls() {
   ], { className: 'button-row' });
 }
 
+const roomEditor = new RoomEditor({
+  gui,
+  panel: roomEditorPanel,
+  room,
+  scene,
+  camera,
+  roomOutline,
+  field2DView,
+  field3DView,
+  roomField,
+  dimensions,
+  onOpen: () => {
+    editorState.room = true;
+    mainPanel.hidden = true;
+    setEditorPanel.hidden = true;
+    roomEditorPanel.hidden = false;
+    refreshSceneMode();
+  },
+  onClose: () => {
+    editorState.room = false;
+    roomEditorPanel.hidden = true;
+    mainPanel.hidden = false;
+    refreshSceneMode();
+    invalidateField();
+  },
+  onChanged: () => {
+    updateRoomSummary();
+    invalidateField();
+    refreshSceneMode();
+  },
+});
+
 frequency.on('selectedFrequencyChanged', state => {
   frequencyValue.textContent = `${state.selectedHz.toFixed(1)} Hz`;
   roomField.setFrequency(state.selectedHz);
-  if (!editorState.set) for (const view of activeFieldViews()) view.invalidate();
+  if (!editorState.set && !editorState.room) for (const view of activeFieldViews()) view.invalidate();
 });
+
+updateRoomSummary();
 
 gui.mount(mainPanel, [
   gui.h('header', {}, [gui.h('h1', { text: 'AcousticMate' }), gui.h('p', { text: 'Live room-mode field' })]),
+  gui.h('h2', { text: 'Room' }),
+  gui.h('section', { className: 'speaker-card room-card' }, [
+    roomSummary,
+    gui.button('Edit room', { on: { click: () => roomEditor.open() } }),
+  ]),
   gui.field('Frequency', gui.stack([frequencySlider, frequencyValue])),
   fieldViewSelector,
   sliceControls,
