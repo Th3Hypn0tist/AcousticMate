@@ -50,10 +50,7 @@ test('RoomGeometryWorkflow supports vertex edge and free measurement anchors', (
   const room = new RectangularRoom({ width: 6, depth: 4.5, height: 2.7 });
   const workflow = new RoomGeometryWorkflow({ room });
   const edge = workflow.polygonEditor.edges()[0];
-  const measurement = workflow.addMeasurementFromAnchors({
-    id: 'mixed-anchor-distance',
-    anchors: [workflow.edgeAnchor(edge, .5), workflow.freeAnchor([3, 2])],
-  });
+  const measurement = workflow.addMeasurementFromAnchors({ id: 'mixed-anchor-distance', anchors: [workflow.edgeAnchor(edge, .5), workflow.freeAnchor([3, 2])] });
   assert.equal(measurement.anchors[0].type, 'edge');
   assert.equal(measurement.anchors[1].type, 'free');
   assert.ok(Math.abs(measurement.value - 2) < 1e-9);
@@ -67,9 +64,15 @@ test('RoomGeometryWorkflow reference transform is absolute and round-trippable',
   workflow.setReferencePosition(1.25, -.5);
   workflow.setReferenceRotation(Math.PI / 6);
   workflow.setReferenceScale(.02, .03);
-  assert.deepEqual(workflow.referenceTransform(), {
-    position: [1.25, -.5],
-    rotation: Math.PI / 6,
-    scale: [.02, .03],
-  });
+  assert.deepEqual(workflow.referenceTransform(), { position: [1.25, -.5], rotation: Math.PI / 6, scale: [.02, .03] });
+});
+
+test('height-only room changes preserve an arbitrary traced footprint', () => {
+  const room = new RectangularRoom({ width: 6, depth: 4.5, height: 2.7 });
+  const workflow = new RoomGeometryWorkflow({ room });
+  workflow.polygonEditor.moveVertex('room-v3', { x: 5.2, z: 4.1 });
+  const before = workflow.polygonEditor.toPolygon();
+  room.setDimensions({ height: 3.2 });
+  assert.deepEqual(workflow.polygonEditor.toPolygon(), before);
+  assert.equal(workflow.volume.height, 3.2);
 });
