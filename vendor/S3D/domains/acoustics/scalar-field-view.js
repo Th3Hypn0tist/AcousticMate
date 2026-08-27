@@ -16,7 +16,7 @@ function normalizedFrequencyRange(value) {
   if (!Array.isArray(value) || value.length !== 2) throw new Error('Frequency range must be [minHz,maxHz] or null');
   const minHz = Number(value[0]);
   const maxHz = Number(value[1]);
-  if (!Number.isFinite(minHz) || !Number.isFinite(maxHz) || minHz < 0 || maxHz <= minHz) throw new Error('Frequency range requires 0 <= minHz < maxHz');
+  if (!Number.isFinite(minHz) || !Number.isFinite(maxHz) || minHz < 0 || maxHz < minHz) throw new Error('Frequency range requires 0 <= minHz <= maxHz');
   return [minHz, maxHz];
 }
 
@@ -25,7 +25,6 @@ function scalarMagnitude(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : 0;
 }
-
 function frequencySamples(range, count = 12) {
   if (!range) return [];
   const [minHz, maxHz] = range;
@@ -33,7 +32,6 @@ function frequencySamples(range, count = 12) {
   if (count === 1 || minHz === maxHz) return [minHz];
   return Array.from({ length: count }, (_, index) => minHz + (maxHz - minHz) * index / (count - 1));
 }
-
 function aggregateValues(values, mode) {
   if (!values.length) return 0;
   if (mode === 'peak') return Math.max(...values);
@@ -70,10 +68,7 @@ class ScalarFieldView extends SceneObject {
     throw new Error('ScalarFieldView field must be callable or implement sample()');
   }
   sampleField(position) {
-    if (this.aggregation !== 'single' && this.frequencyRange) {
-      const values = frequencySamples(this.frequencyRange, this.frequencySampleCount).map(frequencyHz => this.sampleFieldAtFrequency(position, frequencyHz));
-      return aggregateValues(values, this.aggregation);
-    }
+    if (this.aggregation !== 'single' && this.frequencyRange) return aggregateValues(frequencySamples(this.frequencyRange, this.frequencySampleCount).map(frequencyHz => this.sampleFieldAtFrequency(position, frequencyHz)), this.aggregation);
     if (this.frequency != null) return this.sampleFieldAtFrequency(position, this.frequency);
     const field = this.field;
     if (typeof field === 'function') return scalarMagnitude(field(...position));
