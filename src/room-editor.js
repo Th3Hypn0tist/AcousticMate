@@ -1,5 +1,6 @@
 import { Box, Cylinder } from '../vendor/S3D/s3d.js';
 import { AcousticMaterialProfile, AcousticObject } from './acoustic-object.js';
+import { RoomGeometryWorkflow } from './room-geometry-workflow.js';
 
 const WALL_OPTIONS = [
   ['z-min', 'Front wall'],
@@ -38,6 +39,19 @@ class RoomEditor {
     this.markers = new Map();
     this.cameraSnapshot = null;
     this.visible = false;
+    this.geometryStatus = 'Current rectangular geometry is synchronized.';
+    this.geometryWorkflow = new RoomGeometryWorkflow({ room });
+    this.geometryWorkflow.polygonEditor.visible = false;
+    this.geometryWorkflow.volume.visible = false;
+    this.scene.add(this.geometryWorkflow.polygonEditor);
+    this.scene.add(this.geometryWorkflow.volume);
+    this.geometryWorkflow.on('solved', result => {
+      const maxError = Math.max(0, ...result.measurements.map(item => Math.abs(item.error)));
+      this.geometryStatus = result.diagnostics.conflicts.length
+        ? `Solved with ${result.diagnostics.conflicts.length} conflict(s), max error ${maxError.toFixed(3)} m.`
+        : `Geometry solved, max measurement error ${maxError.toFixed(3)} m.`;
+      if (this.visible) this.render();
+    });
     this.room.on('geometryChanged', () => this.applyRoomGeometry());
     this.room.on('openingAdded', () => this.applyOpenings());
     this.room.on('openingChanged', () => this.applyOpenings());
@@ -54,8 +68,11 @@ class RoomEditor {
   }
 
   setMarkerVisibility(value) {
-    for (const marker of this.markers.values()) marker.visible = Boolean(value);
-    for (const object of this.room.acousticObjects ?? []) object.geometry.visible = Boolean(value);
+    const visible = Boolean(value);
+    for (const marker of this.markers.values()) marker.visible = visible;
+    for (const object of this.room.acousticObjects ?? []) object.geometry.visible = visible;
+    this.geometryWorkflow.polygonEditor.visible = visible;
+    this.geometryWorkflow.volume.visible = visible;
   }
 
   applyRoomGeometry() {
@@ -104,11 +121,7 @@ class RoomEditor {
       const { center, size } = this.room.openingRect(opening);
       const thickness = .035;
       marker.setPosition(center, { emit: false });
-      marker.scale = [
-        size[0] ? size[0] / 2 : thickness,
-        size[1] / 2,
-        size[2] ? size[2] / 2 : thickness,
-      ];
+      marker.scale = [size[0] ? size[0] / 2 : thickness, size[1] / 2, size[2] ? size[2] / 2 : thickness];
       marker.visible = this.visible;
     }
     this.roomField.setOpenings(this.room.openings);
@@ -158,6 +171,7 @@ class RoomEditor {
         try {
           update(next);
           event.target.removeAttribute('aria-invalid');
+          event.target.removeAttribute('title');
         } catch (error) {
           event.target.setAttribute('aria-invalid', 'true');
           event.target.title = error.message;
@@ -175,6 +189,60 @@ class RoomEditor {
       this.numberField('Width (m)', d.width, { min: .5, max: 100, update: update('width') }),
       this.numberField('Depth (m)', d.depth, { min: .5, max: 100, update: update('depth') }),
       this.numberField('Height (m)', d.height, { min: .5, max: 30, update: update('height') }),
+    ]);
+  }
+
+  geometryWorkflowControls() {
+    const workflow = this.geometryWorkflow;
+    const referenceName = typeof workflow.referenceLayer.image?.name === 'string' ? workflow.referenceLayer.image.name : 'No reference image';
+    const referenceInput = this.gui.input({
+      type: 'file',
+      accept: 'image/png,image/jpeg',
+      on: { change: event => {
+        const file = event.target.files?.[0] ?? null;
+        if (!file) return;
+        workflow.setReferenceImage(file);
+        this.geometryStatus = `Reference loaded: ${file.name}. Image remains reference-only geometry.`;
+        this.render();
+      } },
+    });
+    const vertices = workflow.polygonEditor.vertices.map(vertex => this.gui.h('section', { className: 'speaker-card member-card' }, [
+      this.gui.h('strong', { text: vertex.id }),
+      this.gui.h('div', { className: 'position-grid' }, [
+        this.numberField('X (m)', vertex.x, { min: -100, max: 100, update: value => workflow.polygonEditor.moveVertex(vertex, { x: value, z: vertex.z }) }),
+        this.numberField('Z (m)', vertex.z, { min: -100, max: 100, update: value => workflow.polygonEditor.moveVertex(vertex, { x: vertex.x, z: value }) }),
+      ]),
+    ]));
+    const widthMeasurement = workflow.measurements.find(item => item.id === 'room-width-front');
+    const depthMeasurement = workflow.measurements.find(item => item.id === 'room-depth-right');
+    const solve = () => {
+      try {
+        const result = workflow.solve();
+        if (workflow.isAxisAlignedRectangle()) {
+          workflow.commitRectangularRoom();
+          this.geometryStatus = result.diagnostics.conflicts.length
+            ? `Solved and committed rectangular geometry with ${result.diagnostics.conflicts.length} conflict(s).`
+            : 'Solved geometry committed to rectangular room.';
+        } else {
+          this.geometryStatus = 'Polygon solved, but current analytical room solver only accepts an axis-aligned rectangle. Geometry was not silently coerced.';
+        }
+      } catch (error) {
+        this.geometryStatus = error.message;
+      }
+      this.render();
+    };
+    return this.gui.h('details', { className: 'signal-chain', open: true }, [
+      this.gui.h('summary', { text: 'Geometry workflow' }),
+      this.gui.field('Reference JPG/PNG', referenceInput),
+      this.gui.h('span', { className: 'model-name', text: referenceName }),
+      this.numberField('Reference opacity', workflow.referenceLayer.opacity, { min: 0, max: 1, step: .05, update: value => workflow.setReferenceOpacity(value) }),
+      this.gui.h('h3', { text: 'Polygon vertices' }),
+      this.gui.h('div', { className: 'member-list' }, vertices),
+      this.gui.h('h3', { text: 'Authoritative measurements' }),
+      this.numberField('Front width (m)', widthMeasurement?.value ?? this.room.dimensions.width, { min: .1, max: 100, update: value => workflow.setMeasurement('room-width-front', value) }),
+      this.numberField('Right depth (m)', depthMeasurement?.value ?? this.room.dimensions.depth, { min: .1, max: 100, update: value => workflow.setMeasurement('room-depth-right', value) }),
+      this.gui.button('Solve measured geometry', { on: { click: solve } }),
+      this.gui.h('p', { className: 'hint', text: this.geometryStatus }),
     ]);
   }
 
@@ -257,10 +325,7 @@ class RoomEditor {
     const updateAttachment = key => value => this.room.updateAcousticObject(object, { attachment: { ...object.attachment, [key]: value } });
     const remove = this.gui.button('Remove', { className: 'danger-button', on: { click: () => this.room.removeAcousticObject(object) } });
     return this.gui.h('section', { className: 'speaker-card treatment-card' }, [
-      this.gui.h('div', { className: 'speaker-heading' }, [
-        this.gui.h('strong', { text: object.id }),
-        remove,
-      ]),
+      this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('strong', { text: object.id }), remove]),
       this.gui.h('span', { className: 'model-name', text: `${object.type} · ${object.geometry.primitive} · ${object.acousticModel}` }),
       this.gui.field('Wall', wall, { className: 'compact-field' }),
       this.gui.h('div', { className: 'position-grid' }, [
@@ -283,6 +348,7 @@ class RoomEditor {
       this.gui.h('header', {}, [this.gui.h('h1', { text: 'Room Editor' }), this.gui.h('p', { text: 'Room geometry · boundaries · acoustic objects' })]),
       this.gui.button('← Back to visualizer', { on: { click: () => this.close() } }),
       this.dimensionControls(),
+      this.geometryWorkflowControls(),
       this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('h2', { text: 'Openings' }), this.gui.button('Add opening', { on: { click: () => this.addOpening() } })]),
       this.gui.h('div', { className: 'member-list' }, this.room.openings.map(opening => this.openingCard(opening))),
       this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('h2', { text: 'Acoustic objects' })]),
