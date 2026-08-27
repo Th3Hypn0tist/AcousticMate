@@ -1,6 +1,6 @@
 {
   "name": "AcousticMate",
-  "version": "0.6.0",
+  "version": "0.8.0",
   "runtime": "browser",
   "language": "JavaScript",
   "renderer": "S3D",
@@ -22,7 +22,8 @@
     "speaker position changes update the acoustic visualization continuously",
     "speaker placement is three-dimensional and includes height",
     "a 3D field view samples the room volume rather than only the floor plane",
-    "new field views are additive and the original 2D heatmap remains available"
+    "new field views are additive and the original 2D heatmap remains available",
+    "open doorways are boundary openings and do not require solving exterior geometry"
   ],
   "coordinateSystem": {
     "x": "horizontal",
@@ -36,7 +37,8 @@
     "height": "constant",
     "floorLevel": 0,
     "holes": false,
-    "slopedCeiling": false
+    "slopedCeiling": false,
+    "boundaryOpenings": true
   },
   "layerBoundaries": {
     "WebGUI": "concept-free minimalist DOM construction and structural rendering",
