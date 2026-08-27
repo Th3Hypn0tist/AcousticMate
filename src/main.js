@@ -3,6 +3,7 @@ import { FieldViewRangeCoordinator, FrequencyRangeController, OrthogonalFieldSli
 import { WebGUI } from '../vendor/WebGUI/webgui.js';
 import { AcousticRuntime } from './acoustic-runtime.js';
 import { CrossoverNetwork } from './crossover-network.js';
+import { formatFrequencyInput, frequencyToSliderPosition, sliderPositionToFrequency } from './log-frequency-control.js';
 import { RectangularRoom } from './room.js';
 import { RoomEditor } from './room-editor.js';
 import { Speaker } from './speaker.js';
@@ -24,9 +25,12 @@ const roomEditorPanel = gui.stack([], { className: 'workspace-panel room-editor-
 sidebar.append(mainPanel, setEditorPanel, roomEditorPanel);
 root.append(gui.h('div', { className: 'app-shell' }, [sidebar, canvas]));
 
+const FREQUENCY_NAV_MIN_HZ = 20;
+const FREQUENCY_NAV_MAX_HZ = 20000;
 const room = new RectangularRoom({ width: 6, height: 2.7, depth: 4.5 });
 const dimensions = room.dimensions;
-const frequency = new FrequencyRangeController({ minHz: 20, maxHz: 140, selectedHz: 58, mode: 'single' });
+const frequency = new FrequencyRangeController({ minHz: FREQUENCY_NAV_MIN_HZ, maxHz: FREQUENCY_NAV_MAX_HZ, selectedHz: 58, mode: 'single' });
+const analysisRange = { minHz: 20, maxHz: 140 };
 const speakers = [];
 const speakerNodes = [];
 const speakerSets = [];
@@ -73,9 +77,9 @@ const acousticRuntime = new AcousticRuntime({
   speakers,
   speakerSets,
   crossoverNetwork,
-  frequencyRange: [frequency.minHz, frequency.maxHz],
+  frequencyRange: [analysisRange.minHz, analysisRange.maxHz],
 });
-const roomField = acousticRuntime.roomField; // compatibility adapter for RoomEditor analytical fast path
+const roomField = acousticRuntime.roomField;
 const frequencyField = acousticRuntime.frequencyField;
 let rangeAggregation = 'rms';
 let rangeSampleCount = 12;
@@ -127,10 +131,17 @@ function invalidateField() {
   if (!editorState.set && !editorState.room) for (const view of activeFieldViews()) view.invalidate();
 }
 
+function requestedAnalysisRange() {
+  if (frequency.mode === 'range') return [analysisRange.minHz, analysisRange.maxHz];
+  const selected = frequency.selectedHz ?? FREQUENCY_NAV_MIN_HZ;
+  return [selected, selected];
+}
+
 function ensureAnalysisRange() {
-  const [minHz, maxHz] = acousticRuntime.frequencyRange;
-  if (Math.abs(minHz - frequency.minHz) < 1e-9 && Math.abs(maxHz - frequency.maxHz) < 1e-9) return;
-  acousticRuntime.setFrequencyRange(frequency.minHz, frequency.maxHz);
+  const requested = requestedAnalysisRange();
+  const current = acousticRuntime.frequencyRange;
+  if (Math.abs(current[0] - requested[0]) < 1e-9 && Math.abs(current[1] - requested[1]) < 1e-9) return;
+  acousticRuntime.setFrequencyRange(requested[0], requested[1]);
 }
 
 function applyFrequencyMode() {
@@ -139,11 +150,11 @@ function applyFrequencyMode() {
     view.setField(frequencyField);
     if (frequency.mode === 'range') {
       view.setFrequency(null);
-      view.setFrequencyRange([frequency.minHz, frequency.maxHz]);
+      view.setFrequencyRange([analysisRange.minHz, analysisRange.maxHz]);
       view.setFrequencySampleCount(rangeSampleCount);
       view.setAggregation(rangeAggregation);
     } else {
-      if (frequency.selectedHz == null) frequency.setSelectedFrequency((frequency.minHz + frequency.maxHz) / 2, false);
+      if (frequency.selectedHz == null) frequency.setSelectedFrequency(58, false);
       view.setFrequencyRange(null);
       view.setFrequency(frequency.selectedHz);
       view.setAggregation('single');
@@ -256,14 +267,43 @@ function buildSignalControls(processors) {
   return gui.h('div', { className: 'signal-controls' }, content);
 }
 
-const frequencyValue = gui.h('output', { text: `${frequency.selectedHz.toFixed(1)} Hz` });
-const frequencySlider = gui.input({ type: 'range', min: frequency.minHz, max: frequency.maxHz, step: .1, value: frequency.selectedHz, on: { input: event => frequency.setSelectedFrequency(Number(event.target.value)) } });
+function commitSelectedFrequency(value, source = null) {
+  const next = Number(value);
+  if (!Number.isFinite(next) || next < FREQUENCY_NAV_MIN_HZ || next > FREQUENCY_NAV_MAX_HZ) {
+    source?.setAttribute('aria-invalid', 'true');
+    return false;
+  }
+  source?.removeAttribute('aria-invalid');
+  frequency.setSelectedFrequency(next);
+  return true;
+}
+
+const frequencyInput = gui.input({
+  type: 'number', min: FREQUENCY_NAV_MIN_HZ, max: FREQUENCY_NAV_MAX_HZ, step: .1,
+  value: formatFrequencyInput(frequency.selectedHz),
+  on: {
+    change: event => {
+      if (!commitSelectedFrequency(event.target.value, event.target)) event.target.value = formatFrequencyInput(frequency.selectedHz);
+    },
+    keydown: event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (commitSelectedFrequency(event.target.value, event.target)) event.target.blur();
+      }
+    },
+  },
+});
+const frequencySlider = gui.input({
+  type: 'range', min: 0, max: 1, step: .0005,
+  value: frequencyToSliderPosition(frequency.selectedHz, FREQUENCY_NAV_MIN_HZ, FREQUENCY_NAV_MAX_HZ),
+  on: { input: event => frequency.setSelectedFrequency(sliderPositionToFrequency(Number(event.target.value), FREQUENCY_NAV_MIN_HZ, FREQUENCY_NAV_MAX_HZ)) },
+});
 const frequencyModeSelect = gui.select({ value: frequency.mode, on: { change: event => frequency.setMode(event.target.value) } }, [gui.option('single', 'Single frequency'), gui.option('range', 'Frequency range')]);
-const rangeMinInput = gui.input({ type: 'number', min: 0, step: 1, value: frequency.minHz });
-const rangeMaxInput = gui.input({ type: 'number', min: 0, step: 1, value: frequency.maxHz });
+const rangeMinInput = gui.input({ type: 'number', min: FREQUENCY_NAV_MIN_HZ, max: FREQUENCY_NAV_MAX_HZ, step: 1, value: analysisRange.minHz });
+const rangeMaxInput = gui.input({ type: 'number', min: FREQUENCY_NAV_MIN_HZ, max: FREQUENCY_NAV_MAX_HZ, step: 1, value: analysisRange.maxHz });
 const rangeAggregationSelect = gui.select({ value: rangeAggregation, on: { change: event => { rangeAggregation = event.target.value; if (frequency.mode === 'range') applyFrequencyMode(); } } }, ['peak', 'rms', 'energy', 'sum'].map(value => gui.option(value, value.toUpperCase())));
 const rangeSampleSelect = gui.select({ value: String(rangeSampleCount), on: { change: event => { rangeSampleCount = Number(event.target.value); if (frequency.mode === 'range') applyFrequencyMode(); } } }, [4, 8, 12, 16, 24].map(value => gui.option(String(value), String(value))));
-const singleFrequencyControls = gui.stack([frequencySlider, frequencyValue]);
+const singleFrequencyControls = gui.stack([frequencySlider, gui.field('Hz', frequencyInput, { className: 'compact-field' })]);
 const rangeFrequencyControls = gui.stack([
   gui.row([gui.field('Min Hz', rangeMinInput, { className: 'compact-field' }), gui.field('Max Hz', rangeMaxInput, { className: 'compact-field' })]),
   gui.field('Aggregation', rangeAggregationSelect, { className: 'compact-field' }),
@@ -272,9 +312,14 @@ const rangeFrequencyControls = gui.stack([
 function applyFrequencyControlVisibility() { singleFrequencyControls.hidden = frequency.mode !== 'single'; rangeFrequencyControls.hidden = frequency.mode !== 'range'; }
 function commitFrequencyRange() {
   try {
-    frequency.setRange(Number(rangeMinInput.value), Number(rangeMaxInput.value));
+    const minHz = Number(rangeMinInput.value);
+    const maxHz = Number(rangeMaxInput.value);
+    if (!Number.isFinite(minHz) || !Number.isFinite(maxHz) || minHz < FREQUENCY_NAV_MIN_HZ || maxHz > FREQUENCY_NAV_MAX_HZ || maxHz < minHz) throw new Error('Analysis range must stay inside 20 Hz–20 kHz');
+    analysisRange.minHz = minHz;
+    analysisRange.maxHz = maxHz;
     rangeMinInput.removeAttribute('aria-invalid');
     rangeMaxInput.removeAttribute('aria-invalid');
+    if (frequency.mode === 'range') applyFrequencyMode();
   } catch (error) {
     rangeMinInput.setAttribute('aria-invalid', 'true');
     rangeMaxInput.setAttribute('aria-invalid', 'true');
@@ -701,18 +746,11 @@ const roomEditor = new RoomEditor({
 
 frequency.on('selectedFrequencyChanged', state => {
   if (state.selectedHz == null) return;
-  frequencyValue.textContent = `${state.selectedHz.toFixed(1)} Hz`;
-  frequencySlider.value = String(state.selectedHz);
+  frequencyInput.value = formatFrequencyInput(state.selectedHz);
+  frequencySlider.value = String(frequencyToSliderPosition(state.selectedHz, FREQUENCY_NAV_MIN_HZ, FREQUENCY_NAV_MAX_HZ));
   if (frequency.mode === 'single') applyFrequencyMode();
 });
-frequency.on('rangeChanged', state => {
-  rangeMinInput.value = String(state.minHz);
-  rangeMaxInput.value = String(state.maxHz);
-  frequencySlider.min = String(state.minHz);
-  frequencySlider.max = String(state.maxHz);
-  if (state.selectedHz == null && frequency.mode === 'single') frequency.setSelectedFrequency((state.minHz + state.maxHz) / 2, false);
-  applyFrequencyMode();
-});
+frequency.on('rangeChanged', () => applyFrequencyMode());
 frequency.on('modeChanged', () => { applyFrequencyControlVisibility(); applyFrequencyMode(); });
 
 updateRoomSummary();
