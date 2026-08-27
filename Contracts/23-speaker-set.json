@@ -24,24 +24,41 @@
   "operations": [
     "addMember",
     "removeMember",
+    "moveMember",
     "setPosition",
     "setOrientation",
     "setMemberPosition",
     "setMemberOrientation",
+    "setMemberGainTrim",
+    "setMemberDelayTrim",
+    "setMemberProcessing",
     "setEnabled",
     "setSignalChain"
   ],
+  "events": [
+    "memberAdded",
+    "memberRemoved",
+    "memberOrderChanged",
+    "memberTransformChanged",
+    "memberProcessingChanged",
+    "positionChanged",
+    "orientationChanged",
+    "enabledChanged",
+    "signalChainChanged"
+  ],
   "transformRule": "memberWorldTransform = setWorldTransform × memberLocalTransform",
   "typeHelpers": {
-    "line-array": ["element order", "spacing", "splay angles", "array tilt", "curvature helpers"],
+    "line-array": ["element order", "element count", "spacing", "splay angles", "array tilt", "curvature helpers"],
     "cluster": ["free member positions", "free member orientations"],
-    "sub-array": ["spacing", "arc/radius helpers", "member delay/gain helpers"],
+    "sub-array": ["element count", "spacing", "arc/radius helpers", "member delay/gain helpers"],
     "generic": ["free member positions", "free member orientations"]
   },
   "rules": [
     "a set is a group of real Speaker instances rather than a replacement speaker model",
     "all members remain independently addressable for acoustic calculation",
     "moving or rotating the set changes every member world transform without rewriting member-local transforms",
+    "member ordering changes topology/order semantics without changing Speaker or member identity",
+    "member gain and delay trims are part of the member transfer and do not replace the member Speaker signal chain",
     "set type selects editor helpers and topology semantics but does not create a separate acoustic solver",
     "line arrays and clusters are represented through SpeakerSet rather than encoded as special SpeakerModel instances",
     "nested sets are not required by this contract"
