@@ -1,0 +1,39 @@
+{
+  "module": "RoomEditor",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "inputs": {
+    "room": "RectangularRoom",
+    "referenceLayer": "ImageReferenceLayer | null"
+  },
+  "operations": [
+    "setWidth",
+    "setDepth",
+    "setHeight",
+    "addOpening",
+    "updateOpening",
+    "removeOpening",
+    "open",
+    "commit",
+    "cancel"
+  ],
+  "opening": {
+    "wall": "x-min | x-max | z-min | z-max",
+    "offset": "meters along wall from its local minimum corner",
+    "width": "meters",
+    "height": "meters",
+    "sillHeight": "meters above floor",
+    "type": "open",
+    "transmission": "0..1"
+  },
+  "rules": [
+    "room dimensions are explicit physical values in meters",
+    "an open doorway is a boundary opening, not a second room",
+    "the exterior space beyond an opening is not part of the solved acoustic domain",
+    "energy leaving through an open boundary is not reflected back into the solved room",
+    "openings must remain inside the wall surface that owns them",
+    "room geometry changes rebuild the analytical modal basis",
+    "the editor must not silently apply the rectangular analytical solver to unsupported arbitrary geometry",
+    "reference images remain non-authoritative geometry aids"
+  ]
+}
