@@ -47,7 +47,18 @@ class SpeakerSet {
     this.emit('memberAdded', { member });
     return member;
   }
-  removeMember(speakerOrId) { const index = this.members.findIndex(member => member.speaker === speakerOrId || member.speaker.id === speakerOrId); if (index < 0) return null; const [member] = this.members.splice(index, 1); if (member.speaker.parentSet === this) member.speaker.parentSet = null; this.emit('memberRemoved', { member }); return member; }
+  removeMember(speakerOrId) { const index = this.members.findIndex(member => member.speaker === speakerOrId || member.speaker.id === speakerOrId); if (index < 0) return null; const [member] = this.members.splice(index, 1); if (member.speaker.parentSet === this) member.speaker.parentSet = null; this.emit('memberRemoved', { member, index }); return member; }
+  moveMember(speakerOrMember, toIndex) {
+    const fromIndex = this.members.findIndex(member => member === speakerOrMember || member.speaker === speakerOrMember || member.speaker.id === speakerOrMember);
+    if (fromIndex < 0) throw new Error('SpeakerSet member not found');
+    toIndex = Number(toIndex);
+    if (!Number.isInteger(toIndex) || toIndex < 0 || toIndex >= this.members.length) throw new Error('SpeakerSet member target index is out of range');
+    if (fromIndex === toIndex) return this;
+    const [member] = this.members.splice(fromIndex, 1);
+    this.members.splice(toIndex, 0, member);
+    this.emit('memberOrderChanged', { member, fromIndex, toIndex, members: [...this.members] });
+    return this;
+  }
   memberForSpeaker(speaker) { return this.members.find(member => member.speaker === speaker) ?? null; }
   requireMember(speaker) { const member = this.memberForSpeaker(speaker); if (!member) throw new Error('Speaker is not a member of this set'); return member; }
   worldTransform(memberOrSpeaker) { const member = memberOrSpeaker?.speaker ? memberOrSpeaker : this.memberForSpeaker(memberOrSpeaker); if (!member) throw new Error('Speaker is not a member of this set'); return composeTransform(this, { position: member.localPosition, orientation: member.localOrientation }); }
