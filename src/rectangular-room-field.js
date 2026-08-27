@@ -170,6 +170,7 @@ class RectangularRoomField {
     const speakers = this.speakers
       .filter(speaker => typeof speaker.isAcousticallyEnabled === 'function' ? speaker.isAcousticallyEnabled() : speaker.enabled !== false)
       .map(speaker => ({ speaker, transfer: this.speakerTransferAt(speaker, frequencyHz) }));
+    const greenScale = this.speedOfSound * this.speedOfSound;
     const preparedModes = this.modes.map(mode => {
       const omegaMode = 2 * Math.PI * mode.frequency;
       const denominatorReal = omegaMode * omegaMode - omega * omega;
@@ -179,8 +180,8 @@ class RectangularRoomField {
       const effectiveInverseQ = baseInverseQ + leakInverseQ + treatmentInverseQ;
       const denominatorImaginary = omegaMode * omega * effectiveInverseQ;
       const denominatorMagnitude = denominatorReal ** 2 + denominatorImaginary ** 2 || 1;
-      const roomReal = denominatorReal / denominatorMagnitude;
-      const roomImaginary = -denominatorImaginary / denominatorMagnitude;
+      const roomReal = greenScale * denominatorReal / denominatorMagnitude;
+      const roomImaginary = -greenScale * denominatorImaginary / denominatorMagnitude;
       let sourceReal = 0;
       let sourceImaginary = 0;
       const normalization = modeNormalization(mode, this.dimensions);
