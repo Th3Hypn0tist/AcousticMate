@@ -9,7 +9,15 @@
   "defaults": {
     "boundary": "rigid"
   },
+  "boundaryCondition": {
+    "rigid": "reflecting room boundary",
+    "open": "energy may leave the solved room through this patch; exterior space is not solved and no return reflection is generated"
+  },
   "outputs": {
     "domain": "solver-ready acoustic volume"
-  }
+  },
+  "rules": [
+    "boundary conditions may vary by surface patch",
+    "an open boundary patch remains part of the room boundary topology but is non-reflecting for the solved interior domain"
+  ]
 }
