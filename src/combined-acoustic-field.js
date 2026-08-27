@@ -10,13 +10,24 @@ function uniqueSpeakers(speakers = [], speakerSets = []) {
 }
 
 class FrequencySliceField {
-  constructor({ owner, frequencyHz } = {}) { this.owner = owner; this.frequency = Number(frequencyHz); this.bounds = owner.domain.bounds; this.range = [0, Infinity]; }
+  constructor({ owner, frequencyHz } = {}) {
+    this.owner = owner;
+    this.frequency = Number(frequencyHz);
+    this.bounds = owner.domain.bounds;
+    this.range = [0, Infinity];
+  }
   sample(x, y, z) { return this.owner.roomField.sampleAtFrequency(x, y, z, this.frequency); }
   sampleComplex(x, y, z) { return this.owner.roomField.sampleComplexAtFrequency(x, y, z, this.frequency); }
 }
 
 class PhaseAwareFrequencyField {
-  constructor(owner) { this.owner = owner; this.bounds = owner.domain.bounds; this.range = owner.frequencyRange; }
+  constructor(owner) {
+    this.owner = owner;
+    this.bounds = owner.domain.bounds;
+    this.range = [0, Infinity];
+    this.frequency = null;
+    this.frequencyRange = [...owner.frequencyRange];
+  }
   sample(x, y, z, frequencyHz) { return this.owner.roomField.sampleAtFrequency(x, y, z, frequencyHz); }
   sampleComplex(x, y, z, frequencyHz) { return this.owner.roomField.sampleComplexAtFrequency(x, y, z, frequencyHz); }
 }
@@ -61,7 +72,7 @@ class CombinedAcousticField {
     minHz = Number(minHz); maxHz = Number(maxHz);
     if (!Number.isFinite(minHz) || !Number.isFinite(maxHz) || minHz < 0 || maxHz < minHz) throw new Error('CombinedAcousticField range requires 0 <= min <= max');
     this.frequencyRange = [minHz, maxHz];
-    this.frequencyField.range = this.frequencyRange;
+    this.frequencyField.frequencyRange = [...this.frequencyRange];
     if (Math.abs(this.roomField.maxFrequency - maxHz) > 1e-9) {
       this.roomField.maxFrequency = maxHz;
       if (this.externalModes) this.roomField.invalidate();
