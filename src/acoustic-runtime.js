@@ -10,6 +10,11 @@ function normalizedAnalysisRange(value = [20, 200]) {
   return [minHz, maxHz];
 }
 
+function modalCoverageRange(analysisRange) {
+  const [, maxHz] = normalizedAnalysisRange(analysisRange);
+  return [0, maxHz];
+}
+
 class AcousticRuntime {
   constructor({ room, speakers = [], speakerSets = [], crossoverNetwork = null, frequencyRange = [20, 200], q = 18, speedOfSound = 343 } = {}) {
     if (!room?.dimensions) throw new Error('AcousticRuntime requires a room');
@@ -22,7 +27,7 @@ class AcousticRuntime {
     this.speedOfSound = Number(speedOfSound);
     this.modeSolver = new RoomModeSolver({ speedOfSound: this.speedOfSound });
     this.domain = AcousticDomain.fromRectangularRoom(room);
-    this.modes = this.modeSolver.solve(this.domain, this.frequencyRange);
+    this.modes = this.modeSolver.solve(this.domain, modalCoverageRange(this.frequencyRange));
     this.combinedField = new CombinedAcousticField({
       domain: this.domain,
       modes: this.modes,
@@ -46,14 +51,14 @@ class AcousticRuntime {
     const range = normalizedAnalysisRange(Array.isArray(minHz) ? minHz : [minHz, maxHz]);
     this.frequencyRange = range;
     this.combinedField.setFrequencyRange(range[0], range[1]);
-    this.modes = this.modeSolver.solve(this.domain, range);
+    this.modes = this.modeSolver.solve(this.domain, modalCoverageRange(range));
     this.combinedField.setModes(this.modes);
     return this.invalidate();
   }
 
   syncRoom() {
     const nextDomain = AcousticDomain.fromRectangularRoom(this.room);
-    const nextModes = this.modeSolver.solve(nextDomain, this.frequencyRange);
+    const nextModes = this.modeSolver.solve(nextDomain, modalCoverageRange(this.frequencyRange));
     this.domain = nextDomain;
     this.modes = nextModes;
     this.combinedField.setDomain(nextDomain).setModes(nextModes);
@@ -67,8 +72,9 @@ class AcousticRuntime {
       combinedField: this.combinedField,
       frequencyField: this.frequencyField,
       frequencyRange: [...this.frequencyRange],
+      modalCoverageRange: modalCoverageRange(this.frequencyRange),
     };
   }
 }
 
-export { AcousticRuntime, normalizedAnalysisRange };
+export { AcousticRuntime, normalizedAnalysisRange, modalCoverageRange };
