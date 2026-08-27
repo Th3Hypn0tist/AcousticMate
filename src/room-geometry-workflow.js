@@ -1,4 +1,4 @@
-import { ConstraintGeometrySolver, ExtrudedVolume, ImageReferenceLayer, Measurement, PolygonEditor } from '../vendor/S3D/s3d.js';
+import { ConstraintGeometrySolver, ExtrudedVolume, ImageReferenceLayer, Measurement, PolygonEditor, resolveAnchor } from '../vendor/S3D/s3d.js';
 
 function rectangleVertices({ width, depth }) {
   return [
@@ -8,6 +8,8 @@ function rectangleVertices({ width, depth }) {
     { id: 'room-v4', x: 0, z: depth },
   ];
 }
+
+function distance(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); }
 
 class RoomGeometryWorkflow {
   constructor({ room } = {}) {
@@ -61,8 +63,32 @@ class RoomGeometryWorkflow {
       rotation: 0,
       scale: [this.room.dimensions.width / width, this.room.dimensions.depth / height],
     });
+    this.emit('referenceChanged', { transform: this.referenceTransform(), fitted: true });
     return this;
   }
+
+  referenceTransform() {
+    return {
+      position: [...this.referenceLayer.position2D],
+      rotation: this.referenceLayer.rotation,
+      scale: [...this.referenceLayer.scaleValue],
+    };
+  }
+
+  setReferenceTransform({ position, rotation, scale } = {}) {
+    const current = this.referenceTransform();
+    this.referenceLayer.setTransform({
+      position: position ?? current.position,
+      rotation: rotation ?? current.rotation,
+      scale: scale ?? current.scale,
+    });
+    this.emit('referenceChanged', { transform: this.referenceTransform() });
+    return this;
+  }
+
+  setReferencePosition(x, z) { return this.setReferenceTransform({ position: [Number(x), Number(z)] }); }
+  setReferenceRotation(value) { return this.setReferenceTransform({ rotation: Number(value) }); }
+  setReferenceScale(x, z = x) { return this.setReferenceTransform({ scale: [Number(x), Number(z)] }); }
 
   setReferenceImage(image) {
     this.referenceName = typeof image?.name === 'string' ? image.name : this.referenceName;
@@ -83,13 +109,40 @@ class RoomGeometryWorkflow {
 
   setReferenceOpacity(value) { this.referenceLayer.setOpacity(value); this.emit('referenceChanged', { opacity: this.referenceLayer.opacity }); return this; }
 
-  setMeasurement(id, value, options = {}) {
+  measurement(id) {
     const measurement = this.measurements.find(item => item.id === id);
     if (!measurement) throw new Error(`Unknown room measurement: ${id}`);
-    const replacement = new Measurement({ ...measurement, ...options, id, anchors: measurement.anchors, value });
+    return measurement;
+  }
+
+  replaceMeasurement(id, options = {}) {
+    const measurement = this.measurement(id);
+    const replacement = new Measurement({
+      id,
+      anchors: options.anchors ?? measurement.anchors,
+      value: options.value ?? measurement.value,
+      source: options.source ?? measurement.source,
+      confidence: options.confidence ?? measurement.confidence,
+      unit: measurement.unit,
+    });
     this.measurements.splice(this.measurements.indexOf(measurement), 1, replacement);
     this.emit('measurementsChanged', { measurements: [...this.measurements] });
     return replacement;
+  }
+
+  setMeasurement(id, value, options = {}) { return this.replaceMeasurement(id, { ...options, value }); }
+
+  setMeasurementAnchors(id, anchors, { preserveValue = false } = {}) {
+    if (!Array.isArray(anchors) || anchors.length !== 2) throw new Error('Measurement requires exactly two anchors');
+    const current = this.measurement(id);
+    const polygon = this.polygonEditor.toPolygon();
+    const actual = distance(resolveAnchor(anchors[0], polygon), resolveAnchor(anchors[1], polygon));
+    return this.replaceMeasurement(id, {
+      anchors,
+      value: preserveValue ? current.value : actual,
+      source: preserveValue ? current.source : 'drawing',
+      confidence: preserveValue ? current.confidence : .5,
+    });
   }
 
   addMeasurement(value) {
@@ -98,6 +151,13 @@ class RoomGeometryWorkflow {
     this.measurements.push(measurement);
     this.emit('measurementsChanged', { measurements: [...this.measurements] });
     return measurement;
+  }
+
+  addMeasurementFromAnchors({ id, anchors, source = 'drawing', confidence = .5, value = null } = {}) {
+    if (!Array.isArray(anchors) || anchors.length !== 2) throw new Error('Measurement requires exactly two anchors');
+    const polygon = this.polygonEditor.toPolygon();
+    const actual = distance(resolveAnchor(anchors[0], polygon), resolveAnchor(anchors[1], polygon));
+    return this.addMeasurement(new Measurement({ id, anchors, value: value ?? actual, source, confidence }));
   }
 
   removeMeasurement(id) {
