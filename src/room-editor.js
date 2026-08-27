@@ -1,4 +1,4 @@
-import { Box, Cylinder } from '../vendor/S3D/s3d.js';
+import { Box, Cylinder, Measurement } from '../vendor/S3D/s3d.js';
 import { AcousticMaterialProfile, AcousticObject } from './acoustic-object.js';
 import { RoomGeometryWorkflow } from './room-geometry-workflow.js';
 
@@ -17,6 +17,18 @@ const TREATMENT_COLORS = {
 
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
 
+function floorPoint(camera, canvas, event, y = .01) {
+  const ray = camera.ray(event.clientX, event.clientY, canvas.getBoundingClientRect());
+  if (Math.abs(ray.direction[1]) < 1e-9) return null;
+  const distance = (y - ray.origin[1]) / ray.direction[1];
+  if (distance < 0) return null;
+  return ray.origin.map((value, index) => value + ray.direction[index] * distance);
+}
+
+function distanceXZ(point, vertex) {
+  return Math.hypot(point[0] - vertex.x, point[2] - vertex.z);
+}
+
 class RoomEditor {
   constructor({
     gui,
@@ -24,6 +36,7 @@ class RoomEditor {
     room,
     scene,
     camera,
+    canvas = null,
     roomOutline,
     field2DView,
     field3DView,
@@ -33,13 +46,18 @@ class RoomEditor {
     onClose = null,
     onChanged = null,
   } = {}) {
-    Object.assign(this, { gui, panel, room, scene, camera, roomOutline, field2DView, field3DView, roomField, dimensions, onOpen, onClose, onChanged });
+    Object.assign(this, { gui, panel, room, scene, camera, canvas, roomOutline, field2DView, field3DView, roomField, dimensions, onOpen, onClose, onChanged });
     this.openingSequence = room.openings.length;
     this.objectSequence = room.acousticObjects?.length ?? 0;
     this.markers = new Map();
     this.cameraSnapshot = null;
     this.visible = false;
     this.geometryStatus = 'Current rectangular geometry is synchronized.';
+    this.interactionMode = 'none';
+    this.pointerDrag = null;
+    this.pendingMeasurementVertex = null;
+    this.traceSequence = 0;
+    this.measurementSequence = 0;
     this.geometryWorkflow = new RoomGeometryWorkflow({ room });
     this.geometryWorkflow.polygonEditor.visible = false;
     this.geometryWorkflow.volume.visible = false;
@@ -62,9 +80,139 @@ class RoomEditor {
       this.scene.remove(event.object.geometry);
       this.applyAcousticObjects();
     });
+    this.bindCanvasInteraction();
     this.applyRoomGeometry();
     this.applyOpenings();
     this.applyAcousticObjects();
+  }
+
+  bindCanvasInteraction() {
+    if (!this.canvas) return;
+    this.onCanvasPointerDown = event => {
+      if (!this.visible || event.button !== 0 || this.interactionMode === 'none') return;
+      const point = floorPoint(this.camera, this.canvas, event);
+      if (!point) return;
+      if (this.interactionMode === 'trace') {
+        const vertex = this.geometryWorkflow.polygonEditor.addVertex({ id: `trace-v-${++this.traceSequence}`, x: point[0], z: point[2] });
+        this.geometryWorkflow.polygonEditor.select(vertex);
+        this.geometryStatus = `Tracing: ${this.geometryWorkflow.polygonEditor.vertices.length} vertices. Click around the room, then close polygon.`;
+        this.render();
+        event.preventDefault();
+        return;
+      }
+      const vertex = this.nearestVertex(point);
+      if (!vertex) return;
+      if (this.interactionMode === 'measure') {
+        this.captureMeasurementVertex(vertex);
+        event.preventDefault();
+        return;
+      }
+      if (this.interactionMode === 'edit') {
+        this.pointerDrag = { id: event.pointerId, vertex };
+        this.geometryWorkflow.polygonEditor.select(vertex);
+        this.canvas.setPointerCapture(event.pointerId);
+        event.preventDefault();
+      }
+    };
+    this.onCanvasPointerMove = event => {
+      if (!this.visible || !this.pointerDrag || event.pointerId !== this.pointerDrag.id) return;
+      const point = floorPoint(this.camera, this.canvas, event);
+      if (!point) return;
+      this.geometryWorkflow.polygonEditor.moveVertex(this.pointerDrag.vertex, { x: point[0], z: point[2] });
+      const polygon = this.geometryWorkflow.polygonEditor.toPolygon();
+      if (polygon.closed && polygon.vertices.length >= 3) this.geometryWorkflow.volume.setPolygon(this.geometryWorkflow.polygonEditor);
+      event.preventDefault();
+    };
+    this.onCanvasPointerUp = event => {
+      if (!this.pointerDrag || event.pointerId !== this.pointerDrag.id) return;
+      this.pointerDrag = null;
+      if (this.canvas.hasPointerCapture(event.pointerId)) this.canvas.releasePointerCapture(event.pointerId);
+      this.geometryStatus = 'Polygon vertex moved. Solve measured geometry to reconcile authoritative dimensions.';
+      this.render();
+    };
+    this.canvas.addEventListener('pointerdown', this.onCanvasPointerDown);
+    this.canvas.addEventListener('pointermove', this.onCanvasPointerMove);
+    this.canvas.addEventListener('pointerup', this.onCanvasPointerUp);
+    this.canvas.addEventListener('pointercancel', this.onCanvasPointerUp);
+  }
+
+  nearestVertex(point) {
+    const vertices = this.geometryWorkflow.polygonEditor.vertices;
+    if (!vertices.length) return null;
+    const threshold = Math.max(.12, Math.min(this.room.dimensions.width, this.room.dimensions.depth) * .05);
+    let best = null;
+    for (const vertex of vertices) {
+      const distance = distanceXZ(point, vertex);
+      if (distance <= threshold && (!best || distance < best.distance)) best = { vertex, distance };
+    }
+    return best?.vertex ?? null;
+  }
+
+  setInteractionMode(mode) {
+    if (!['none', 'trace', 'edit', 'measure'].includes(mode)) throw new Error(`Unknown room interaction mode: ${mode}`);
+    this.interactionMode = mode;
+    this.pointerDrag = null;
+    if (mode !== 'measure') this.pendingMeasurementVertex = null;
+    if (this.visible) this.render();
+    return this;
+  }
+
+  startTracing() {
+    this.geometryWorkflow.polygonEditor.restore({ vertices: [], closed: false, selection: [] });
+    this.geometryWorkflow.volume.visible = false;
+    this.traceSequence = 0;
+    this.geometryStatus = 'Trace mode: LMB places room vertices on the floor plane. RMB still orbits.';
+    this.setInteractionMode('trace');
+  }
+
+  closeTracing() {
+    const editor = this.geometryWorkflow.polygonEditor;
+    if (editor.vertices.length < 3) {
+      this.geometryStatus = 'At least three vertices are required before closing the polygon.';
+      this.render();
+      return;
+    }
+    editor.closePolygon();
+    this.geometryWorkflow.volume.setPolygon(editor).setHeight(this.room.dimensions.height);
+    this.geometryWorkflow.volume.visible = this.visible;
+    this.geometryStatus = 'Polygon closed. Add measurements or edit vertices, then solve.';
+    this.setInteractionMode('edit');
+  }
+
+  cancelTracing() {
+    this.geometryWorkflow.syncFromRoom();
+    this.geometryWorkflow.volume.visible = this.visible;
+    this.geometryStatus = 'Tracing cancelled; restored current room geometry.';
+    this.setInteractionMode('none');
+  }
+
+  captureMeasurementVertex(vertex) {
+    const editor = this.geometryWorkflow.polygonEditor;
+    editor.select(vertex);
+    if (!this.pendingMeasurementVertex) {
+      this.pendingMeasurementVertex = vertex;
+      this.geometryStatus = `Measure mode: first anchor ${vertex.id}. Click the second vertex.`;
+      this.render();
+      return;
+    }
+    const first = this.pendingMeasurementVertex;
+    this.pendingMeasurementVertex = null;
+    if (first === vertex) {
+      this.geometryStatus = 'Measurement anchors must be two different vertices.';
+      this.render();
+      return;
+    }
+    const value = Math.hypot(vertex.x - first.x, vertex.z - first.z);
+    const measurement = new Measurement({
+      id: `measurement-${++this.measurementSequence}`,
+      anchors: [{ type: 'vertex', target: first.id }, { type: 'vertex', target: vertex.id }],
+      value,
+      source: 'drawing',
+      confidence: .5,
+    });
+    this.geometryWorkflow.addMeasurement(measurement);
+    this.geometryStatus = `Measurement ${measurement.id} created from drawing (${value.toFixed(3)} m). Enter the measured value to make it authoritative.`;
+    this.render();
   }
 
   setMarkerVisibility(value) {
@@ -72,7 +220,7 @@ class RoomEditor {
     for (const marker of this.markers.values()) marker.visible = visible;
     for (const object of this.room.acousticObjects ?? []) object.geometry.visible = visible;
     this.geometryWorkflow.polygonEditor.visible = visible;
-    this.geometryWorkflow.volume.visible = visible;
+    this.geometryWorkflow.volume.visible = visible && this.geometryWorkflow.polygonEditor.closed;
   }
 
   applyRoomGeometry() {
@@ -192,6 +340,28 @@ class RoomEditor {
     ]);
   }
 
+  measurementCard(measurement) {
+    const [a, b] = measurement.anchors;
+    const editable = this.numberField('Distance (m)', measurement.value, {
+      min: .001,
+      max: 1000,
+      update: value => {
+        this.geometryWorkflow.setMeasurement(measurement.id, value, { source: 'measured', confidence: 1 });
+        this.geometryStatus = `${measurement.id} is now an authoritative measured constraint.`;
+        this.render();
+      },
+    });
+    const remove = this.gui.button('Remove', { className: 'danger-button', on: { click: () => {
+      this.geometryWorkflow.removeMeasurement(measurement.id);
+      this.render();
+    } } });
+    return this.gui.h('section', { className: 'speaker-card member-card' }, [
+      this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('strong', { text: measurement.id }), remove]),
+      this.gui.h('span', { className: 'model-name', text: `${a.target ?? a.type} → ${b.target ?? b.type} · ${measurement.source}` }),
+      editable,
+    ]);
+  }
+
   geometryWorkflowControls() {
     const workflow = this.geometryWorkflow;
     const referenceName = typeof workflow.referenceLayer.image?.name === 'string' ? workflow.referenceLayer.image.name : 'No reference image';
@@ -213,8 +383,6 @@ class RoomEditor {
         this.numberField('Z (m)', vertex.z, { min: -100, max: 100, update: value => workflow.polygonEditor.moveVertex(vertex, { x: vertex.x, z: value }) }),
       ]),
     ]));
-    const widthMeasurement = workflow.measurements.find(item => item.id === 'room-width-front');
-    const depthMeasurement = workflow.measurements.find(item => item.id === 'room-depth-right');
     const solve = () => {
       try {
         const result = workflow.solve();
@@ -231,19 +399,31 @@ class RoomEditor {
       }
       this.render();
     };
+    const interactionButtons = this.gui.row([
+      this.gui.button('Trace polygon', { on: { click: () => this.startTracing() } }),
+      this.gui.button('Edit vertices', { on: { click: () => this.setInteractionMode('edit') } }),
+      this.gui.button('Measure vertices', { on: { click: () => this.setInteractionMode('measure') } }),
+      this.gui.button('Stop interaction', { on: { click: () => this.setInteractionMode('none') } }),
+    ], { className: 'button-row' });
+    const traceActions = this.interactionMode === 'trace' ? this.gui.row([
+      this.gui.button('Close polygon', { on: { click: () => this.closeTracing() } }),
+      this.gui.button('Cancel tracing', { on: { click: () => this.cancelTracing() } }),
+    ], { className: 'button-row' }) : null;
     return this.gui.h('details', { className: 'signal-chain', open: true }, [
       this.gui.h('summary', { text: 'Geometry workflow' }),
       this.gui.field('Reference JPG/PNG', referenceInput),
       this.gui.h('span', { className: 'model-name', text: referenceName }),
       this.numberField('Reference opacity', workflow.referenceLayer.opacity, { min: 0, max: 1, step: .05, update: value => workflow.setReferenceOpacity(value) }),
+      interactionButtons,
+      traceActions,
+      this.gui.h('span', { className: 'coordinates', text: `Interaction: ${this.interactionMode}` }),
       this.gui.h('h3', { text: 'Polygon vertices' }),
       this.gui.h('div', { className: 'member-list' }, vertices),
-      this.gui.h('h3', { text: 'Authoritative measurements' }),
-      this.numberField('Front width (m)', widthMeasurement?.value ?? this.room.dimensions.width, { min: .1, max: 100, update: value => workflow.setMeasurement('room-width-front', value) }),
-      this.numberField('Right depth (m)', depthMeasurement?.value ?? this.room.dimensions.depth, { min: .1, max: 100, update: value => workflow.setMeasurement('room-depth-right', value) }),
+      this.gui.h('h3', { text: 'Measurements' }),
+      this.gui.h('div', { className: 'member-list' }, workflow.measurements.map(measurement => this.measurementCard(measurement))),
       this.gui.button('Solve measured geometry', { on: { click: solve } }),
       this.gui.h('p', { className: 'hint', text: this.geometryStatus }),
-    ]);
+    ].filter(Boolean));
   }
 
   openingCard(opening) {
@@ -378,6 +558,7 @@ class RoomEditor {
   close() {
     if (!this.visible) return;
     this.visible = false;
+    this.setInteractionMode('none');
     this.panel.hidden = true;
     this.setMarkerVisibility(false);
     if (this.cameraSnapshot) {
@@ -387,6 +568,14 @@ class RoomEditor {
     this.cameraSnapshot = null;
     this.onClose?.();
   }
+
+  destroy() {
+    if (!this.canvas) return;
+    this.canvas.removeEventListener('pointerdown', this.onCanvasPointerDown);
+    this.canvas.removeEventListener('pointermove', this.onCanvasPointerMove);
+    this.canvas.removeEventListener('pointerup', this.onCanvasPointerUp);
+    this.canvas.removeEventListener('pointercancel', this.onCanvasPointerUp);
+  }
 }
 
-export { RoomEditor };
+export { RoomEditor, floorPoint };
