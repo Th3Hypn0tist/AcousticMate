@@ -17,9 +17,12 @@
   "ownershipRules": [
     "concept-free DOM structure belongs in WebGUI",
     "domain-independent structural 3D functionality belongs in S3D/core",
+    "S3D Primitive is the canonical reusable geometry abstraction for physical objects",
+    "new generic primitive implementations such as Cylinder belong in S3D/core",
+    "AcousticMate must not define a parallel primitive type system or duplicate generic primitive geometry",
     "reusable instantiable acoustic functionality may belong in S3D/domains/acoustics",
     "the reusable draggable SpeakerNode view belongs in S3D/domains/acoustics while the AcousticMate speaker model remains in AcousticMate",
-    "AcousticMate-specific project state, workflows and orchestration remain in AcousticMate",
+    "AcousticMate-specific project state, acoustic boundary/material models, workflows and orchestration remain in AcousticMate",
     "a reusable module is implemented once in its owning framework",
     "AcousticMate may commit distribution snapshots of S3D and WebGUI under vendor without assuming ownership of their implementation",
     "vendored framework snapshots are consumed through their public entry points and refreshed from their owning repositories"
