@@ -1,0 +1,63 @@
+{
+  "module": "AcousticObjectBoundaryModel",
+  "scope": "AcousticMate",
+  "instantiable": true,
+  "purpose": "represent physical acoustic-treatment objects and their local boundary behavior without duplicating S3D geometry primitives",
+  "acousticObject": {
+    "geometry": "S3D Primitive instance",
+    "acousticModel": "AcousticBoundaryModel",
+    "materialProfile": "AcousticMaterialProfile | null",
+    "attachment": "RoomSurfaceAttachment | null",
+    "metadata": "object"
+  },
+  "geometryRules": [
+    "AcousticMate does not define a parallel primitive type system",
+    "the geometry of an AcousticObject is an instantiated S3D Primitive",
+    "any S3D primitive supported by the renderer may be used",
+    "new reusable primitive implementations belong in S3D/core, not AcousticMate",
+    "physical acoustic-treatment objects have finite volume and thickness",
+    "Plane is not required as a physical AcousticObject primitive",
+    "Box and Cylinder are sufficient canonical primitives for the initial treatment-object library",
+    "specialized names such as AbsorberMesh, DiffuserMesh or BassTrapMesh must not duplicate existing primitive geometry"
+  ],
+  "boundaryModels": {
+    "rigid": "reflecting boundary behavior",
+    "open": "energy leaves the solved room and exterior geometry is not solved",
+    "absorptive": "frequency-dependent energy loss described by an absorption/material profile",
+    "scattering": "frequency-dependent redistribution of reflected energy; exact scattering physics may require a later solver",
+    "impedance": "general frequency-dependent boundary impedance model reserved for solver strategies that support it"
+  },
+  "semanticObjects": {
+    "absorber": "AcousticObject using an S3D Primitive plus an absorptive boundary/material model",
+    "diffuser": "AcousticObject using an S3D Primitive plus a scattering boundary/material model",
+    "bassTrap": "AcousticObject using an S3D Primitive plus an absorptive or impedance model"
+  },
+  "boundaryPatch": {
+    "purpose": "apply a local boundary condition to a bounded area of an existing room surface",
+    "geometry": "surface-local bounded region",
+    "model": "AcousticBoundaryModel",
+    "examples": [
+      "open doorway",
+      "surface area covered by an attached absorber",
+      "surface area influenced by an attached diffuser"
+    ]
+  },
+  "openingRule": "an opening remains a BoundaryPatch in the room surface and is not represented as a finite-volume AcousticObject",
+  "attachmentRules": [
+    "an AcousticObject may exist free-standing or attached to a room surface",
+    "when attached, its wall-facing/contact relation may generate or bind a BoundaryPatch for solver use",
+    "render geometry and acoustic boundary behavior are separate concerns",
+    "the solver must consume acoustic models/boundary patches rather than infer treatment physics from primitive names"
+  ],
+  "solverRules": [
+    "the current rectangular modal solver may approximate absorptive treatment as mode-dependent loss over affected boundary area",
+    "the current rectangular modal solver must not claim exact diffuser scattering behavior",
+    "exact mixed-boundary, impedance or scattering behavior may require numerical or reflection/scattering solver strategies",
+    "unsupported boundary physics must be explicit rather than silently treated as exact"
+  ],
+  "applicationRules": [
+    "RoomEditor may create, place, move, rotate, resize and remove AcousticObject instances",
+    "AcousticMate may provide reusable material/acoustic profiles without fabricating measured manufacturer data",
+    "AcousticMate must not automatically recommend absorber or diffuser placement unless a separate explicit feature contract later allows it"
+  ]
+}
