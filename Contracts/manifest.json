@@ -1,6 +1,6 @@
 {
   "package": "acousticmate-contracts",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "files": [
     "00-project-contract.json",
     "01-image-reference-layer.json",
@@ -28,6 +28,7 @@
     "23-speaker-set.json",
     "24-speaker-set-editor.json",
     "25-room-editor.json",
+    "26-acoustic-object-boundary-model.json",
     "README.md",
     "manifest.json"
   ],
