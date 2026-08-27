@@ -11,7 +11,7 @@ import { Viewport } from './viewport.js';
 import { OrbitControls } from './interaction/orbit-controls.js';
 import { PlaneDragController } from './interaction/plane-drag-controller.js';
 import { SceneObject, Group } from './objects/object.js';
-import { Primitive, Box, Point } from './objects/primitives.js';
+import { Primitive, Box, Point, Cylinder } from './objects/primitives.js';
 import { Anchor } from './objects/anchors.js';
 import { Link } from './objects/links.js';
 import { PropsItem } from './objects/props_item.js';
@@ -43,6 +43,7 @@ const S3D = Object.freeze({
   Primitive,
   Box,
   Point,
+  Cylinder,
   Anchor,
   Link,
   PropsItem,
@@ -76,6 +77,7 @@ export {
   Primitive,
   Box,
   Point,
+  Cylinder,
   Anchor,
   Link,
   PropsItem,
