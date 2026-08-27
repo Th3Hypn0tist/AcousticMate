@@ -39,9 +39,48 @@ function modalSourceCoupling(mode, speaker, dimensions, frequencyHz) {
   return [real / componentCount, imaginary / componentCount];
 }
 
+function openingPoint(opening, u, v, dimensions) {
+  const along = opening.offset + opening.width * u;
+  const y = opening.sillHeight + opening.height * v;
+  if (opening.wall === 'x-min') return [0, y, along];
+  if (opening.wall === 'x-max') return [dimensions.width, y, along];
+  if (opening.wall === 'z-min') return [along, y, 0];
+  if (opening.wall === 'z-max') return [along, y, dimensions.depth];
+  throw new Error(`Unsupported opening wall: ${opening.wall}`);
+}
+
+function openingModeEffectiveArea(mode, opening, dimensions, grid = 4) {
+  if (opening?.type !== 'open') return 0;
+  const count = Math.max(1, Math.floor(Number(grid) || 1));
+  let sum = 0;
+  for (let iv = 0; iv < count; iv++) for (let iu = 0; iu < count; iu++) {
+    const point = openingPoint(opening, (iu + .5) / count, (iv + .5) / count, dimensions);
+    const value = modeShape(mode, point, dimensions);
+    sum += value * value;
+  }
+  const meanBoundarySquared = sum / (count * count);
+  const multiplicity = (mode.nx ? 2 : 1) * (mode.ny ? 2 : 1) * (mode.nz ? 2 : 1);
+  const normalizedBoundaryIntensity = multiplicity * meanBoundarySquared;
+  const area = Number(opening.width) * Number(opening.height);
+  const transmission = Math.max(0, Math.min(1, Number(opening.transmission ?? 1)));
+  return area * transmission * normalizedBoundaryIntensity;
+}
+
+function openingInverseQ(mode, openings, dimensions, speedOfSound = SPEED_OF_SOUND) {
+  if (!openings?.length || mode.frequency <= 0) return 0;
+  const volume = dimensions.width * dimensions.height * dimensions.depth;
+  const omegaMode = 2 * Math.PI * mode.frequency;
+  const effectiveArea = openings.reduce((total, opening) => total + openingModeEffectiveArea(mode, opening, dimensions), 0);
+  // Perfectly open boundary approximation: modal energy crossing an aperture leaves
+  // the solved room and is not reflected or propagated into an exterior domain.
+  // This is a low-frequency damping approximation, not an exterior radiation solve.
+  return speedOfSound * effectiveArea / (4 * omegaMode * volume);
+}
+
 class RectangularRoomField {
-  constructor({ dimensions, speakers = [], frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
+  constructor({ dimensions, openings = [], speakers = [], frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
     this.dimensions = { ...dimensions };
+    this.openings = [...openings];
     this.speakers = speakers;
     this.frequency = Number(frequency);
     this.maxFrequency = Number(maxFrequency);
@@ -66,8 +105,12 @@ class RectangularRoomField {
   }
 
   invalidate() { this.preparedModes = null; return this; }
+  rebuildModes() { this.modes = this.buildModes(); return this.invalidate(); }
   setFrequency(value) { this.frequency = Number(value); return this.invalidate(); }
   setSpeakers(speakers) { this.speakers = speakers; return this.invalidate(); }
+  setOpenings(openings = []) { this.openings = [...openings]; return this.invalidate(); }
+  setDimensions(dimensions) { this.dimensions = { ...dimensions }; return this.rebuildModes(); }
+  setRoom(room) { this.dimensions = { ...room.dimensions }; this.openings = [...room.openings]; return this.rebuildModes(); }
 
   speakerTransfer(speaker) {
     if (typeof speaker.transferAt === 'function') return speaker.transferAt(this.frequency);
@@ -87,7 +130,10 @@ class RectangularRoomField {
     this.preparedModes = this.modes.map(mode => {
       const omegaMode = 2 * Math.PI * mode.frequency;
       const denominatorReal = omegaMode * omegaMode - omega * omega;
-      const denominatorImaginary = omegaMode * omega / this.q;
+      const baseInverseQ = 1 / this.q;
+      const leakInverseQ = openingInverseQ(mode, this.openings, this.dimensions, this.speedOfSound);
+      const effectiveInverseQ = baseInverseQ + leakInverseQ;
+      const denominatorImaginary = omegaMode * omega * effectiveInverseQ;
       const denominatorMagnitude = denominatorReal ** 2 + denominatorImaginary ** 2 || 1;
       const roomReal = denominatorReal / denominatorMagnitude;
       const roomImaginary = -denominatorImaginary / denominatorMagnitude;
@@ -103,6 +149,8 @@ class RectangularRoomField {
       }
       return {
         mode,
+        inverseQ: effectiveInverseQ,
+        openingInverseQ: leakInverseQ,
         real: sourceReal * roomReal - sourceImaginary * roomImaginary,
         imaginary: sourceReal * roomImaginary + sourceImaginary * roomReal,
       };
@@ -129,4 +177,12 @@ class RectangularRoomField {
   }
 }
 
-export { RectangularRoomField, modalSourceCoupling, modeNormalization, modeShape, SPEED_OF_SOUND };
+export {
+  RectangularRoomField,
+  modalSourceCoupling,
+  modeNormalization,
+  modeShape,
+  openingModeEffectiveArea,
+  openingInverseQ,
+  SPEED_OF_SOUND,
+};
