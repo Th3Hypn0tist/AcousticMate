@@ -1,3 +1,5 @@
+import { Complex } from './complex.js';
+
 const SPEED_OF_SOUND = 343;
 
 function modeShape(mode, point, dimensions) {
@@ -93,11 +95,12 @@ function acousticObjectInverseQ(mode, acousticObjects, dimensions, speedOfSound 
 }
 
 class RectangularRoomField {
-  constructor({ dimensions, openings = [], acousticObjects = [], speakers = [], frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
+  constructor({ dimensions, openings = [], acousticObjects = [], speakers = [], crossoverNetwork = null, frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
     this.dimensions = { ...dimensions };
     this.openings = [...openings];
     this.acousticObjects = [...acousticObjects];
     this.speakers = speakers;
+    this.crossoverNetwork = crossoverNetwork;
     this.frequency = Number(frequency);
     this.maxFrequency = Number(maxFrequency);
     this.q = Number(q);
@@ -135,6 +138,11 @@ class RectangularRoomField {
     return this;
   }
   setSpeakers(speakers) { this.speakers = speakers; return this.invalidate(); }
+  setCrossoverNetwork(value) {
+    if (value != null && typeof value.transferFor !== 'function') throw new Error('Crossover network must implement transferFor(speaker, frequencyHz)');
+    this.crossoverNetwork = value;
+    return this.invalidate();
+  }
   setOpenings(openings = []) { this.openings = [...openings]; return this.invalidate(); }
   setAcousticObjects(acousticObjects = []) { this.acousticObjects = [...acousticObjects]; return this.invalidate(); }
   setDimensions(dimensions) { this.dimensions = { ...dimensions }; return this.rebuildModes(); }
@@ -146,12 +154,17 @@ class RectangularRoomField {
   }
 
   speakerTransferAt(speaker, frequencyHz) {
-    if (typeof speaker.transferAt === 'function') return speaker.transferAt(frequencyHz);
-    const gain = 10 ** (Number(speaker.gainDb ?? 0) / 20);
-    const polarity = speaker.polarityInverted ? Math.PI : 0;
-    const delay = -2 * Math.PI * frequencyHz * Number(speaker.delayMs ?? 0) / 1000;
-    const phase = polarity + delay;
-    return [gain * Math.cos(phase), gain * Math.sin(phase)];
+    let local;
+    if (typeof speaker.transferAt === 'function') local = speaker.transferAt(frequencyHz);
+    else {
+      const gain = 10 ** (Number(speaker.gainDb ?? 0) / 20);
+      const polarity = speaker.polarityInverted ? Math.PI : 0;
+      const delay = -2 * Math.PI * frequencyHz * Number(speaker.delayMs ?? 0) / 1000;
+      const phase = polarity + delay;
+      local = [gain * Math.cos(phase), gain * Math.sin(phase)];
+    }
+    const routed = this.crossoverNetwork?.transferFor?.(speaker, frequencyHz) ?? [1, 0];
+    return Complex.multiply(local, routed);
   }
 
   speakerTransfer(speaker) { return this.speakerTransferAt(speaker, this.frequency); }
