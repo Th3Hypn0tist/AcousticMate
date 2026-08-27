@@ -1,5 +1,6 @@
 // Reusable, host-independent acoustics domain modules.
 export { FrequencyRangeController } from './frequency-range-controller.js';
+export { ScalarFieldView, FIELD_AGGREGATIONS } from './scalar-field-view.js';
 export { SpeakerNode } from './speaker-node.js';
 export { SampledFieldPlane } from './sampled-field-plane.js';
 export { OrthogonalFieldSlices } from './orthogonal-field-slices.js';
