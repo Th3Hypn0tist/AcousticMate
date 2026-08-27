@@ -13,6 +13,21 @@ function finite(value, name) {
   return value;
 }
 
+function axisIndex(axis) {
+  if (axis === 'x' || axis === 0) return 0;
+  if (axis === 'y' || axis === 1) return 1;
+  if (axis === 'z' || axis === 2) return 2;
+  throw new Error(`Unknown layout axis: ${axis}`);
+}
+
+function selectedMembers(set, members = null) {
+  requireSet(set);
+  if (members == null) return [...set.members];
+  const values = members.map(value => value?.speaker ? value : set.memberForSpeaker?.(value)).filter(Boolean);
+  for (const member of values) if (!set.members.includes(member)) throw new Error('Layout member does not belong to SpeakerSet');
+  return values;
+}
+
 function applyLineArrayLayout(set, { spacing = .3, splayDeg = 0, arrayTiltDeg = 0 } = {}) {
   requireSet(set);
   spacing = finite(spacing, 'Line-array spacing');
@@ -68,4 +83,58 @@ function applySubArrayLayout(set, { spacing = .8, arcDeg = 0, radius = 0 } = {})
   return set;
 }
 
-export { applyLineArrayLayout, applyClusterLayout, applySubArrayLayout };
+function mirrorMembers(set, { axis = 'x', origin = 0, members = null } = {}) {
+  const index = axisIndex(axis);
+  origin = finite(origin, 'Mirror origin');
+  for (const member of selectedMembers(set, members)) {
+    const position = [...member.localPosition];
+    position[index] = origin - (position[index] - origin);
+    set.setMemberPosition(member.speaker, position);
+  }
+  return set;
+}
+
+function alignMembers(set, { axis = 'x', mode = 'center', value = null, members = null } = {}) {
+  const index = axisIndex(axis);
+  const values = selectedMembers(set, members);
+  if (!values.length) return set;
+  const coordinates = values.map(member => member.localPosition[index]);
+  let target;
+  if (value != null) target = finite(value, 'Alignment value');
+  else if (mode === 'min') target = Math.min(...coordinates);
+  else if (mode === 'max') target = Math.max(...coordinates);
+  else if (mode === 'center') target = (Math.min(...coordinates) + Math.max(...coordinates)) / 2;
+  else if (mode === 'mean') target = coordinates.reduce((sum, current) => sum + current, 0) / coordinates.length;
+  else throw new Error(`Unknown alignment mode: ${mode}`);
+  for (const member of values) {
+    const position = [...member.localPosition];
+    position[index] = target;
+    set.setMemberPosition(member.speaker, position);
+  }
+  return set;
+}
+
+function distributeMembers(set, { axis = 'x', start = null, end = null, members = null } = {}) {
+  const index = axisIndex(axis);
+  const values = selectedMembers(set, members).sort((a, b) => a.localPosition[index] - b.localPosition[index]);
+  if (values.length < 2) return set;
+  start = start == null ? values[0].localPosition[index] : finite(start, 'Distribution start');
+  end = end == null ? values.at(-1).localPosition[index] : finite(end, 'Distribution end');
+  const step = (end - start) / (values.length - 1);
+  values.forEach((member, memberIndex) => {
+    const position = [...member.localPosition];
+    position[index] = start + step * memberIndex;
+    set.setMemberPosition(member.speaker, position);
+  });
+  return set;
+}
+
+export {
+  applyLineArrayLayout,
+  applyClusterLayout,
+  applySubArrayLayout,
+  mirrorMembers,
+  alignMembers,
+  distributeMembers,
+  axisIndex,
+};
