@@ -24,6 +24,11 @@
   "rules": [
     "solver strategy is hidden behind one interface",
     "rectangular rooms may use analytical fast path",
-    "arbitrary supported room shapes use numerical eigenmode solving"
+    "arbitrary supported room shapes use numerical eigenmode solving",
+    "a perfectly rigid rectangular room uses the analytical cosine eigenbasis",
+    "open boundary patches invalidate the exact rigid-boundary eigenproblem",
+    "until a mixed-boundary numerical solver exists, rectangular open boundaries use an explicitly labelled mode-dependent leakage approximation",
+    "the open-boundary approximation removes modal energy according to field strength over the aperture and never solves exterior geometry",
+    "the analytical opening approximation must not be described as an exact mixed-boundary eigenmode solution"
   ]
 }
