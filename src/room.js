@@ -45,11 +45,13 @@ class RoomOpening {
 }
 
 class RectangularRoom {
-  constructor({ width = 6, height = 2.7, depth = 4.5, openings = [] } = {}) {
+  constructor({ width = 6, height = 2.7, depth = 4.5, openings = [], acousticObjects = [] } = {}) {
     this.dimensions = { width: positive(width, 'Room width'), height: positive(height, 'Room height'), depth: positive(depth, 'Room depth') };
     this.openings = [];
+    this.acousticObjects = [];
     this.listeners = new Map();
     for (const opening of openings) this.addOpening(opening);
+    for (const object of acousticObjects) this.addAcousticObject(object);
   }
 
   on(event, listener) {
@@ -64,15 +66,28 @@ class RectangularRoom {
   }
 
   wallSpan(wall) {
-    if (!WALLS.has(wall)) throw new Error(`Unsupported opening wall: ${wall}`);
+    if (!WALLS.has(wall)) throw new Error(`Unsupported wall: ${wall}`);
     return wall.startsWith('x-') ? this.dimensions.depth : this.dimensions.width;
   }
 
+  validatePatch({ id = 'patch', wall, offset, width, height, sillHeight }) {
+    if (!WALLS.has(wall)) throw new Error(`Unsupported wall: ${wall}`);
+    const span = this.wallSpan(wall);
+    if (Number(offset) < 0 || Number(offset) + Number(width) > span + 1e-9) throw new Error(`${id} exceeds ${wall} wall span`);
+    if (Number(sillHeight) < 0 || Number(sillHeight) + Number(height) > this.dimensions.height + 1e-9) throw new Error(`${id} exceeds room height`);
+    return true;
+  }
+
   validateOpening(opening) {
-    const span = this.wallSpan(opening.wall);
-    if (opening.offset + opening.width > span + 1e-9) throw new Error(`Opening ${opening.id} exceeds ${opening.wall} wall span`);
-    if (opening.sillHeight + opening.height > this.dimensions.height + 1e-9) throw new Error(`Opening ${opening.id} exceeds room height`);
+    this.validatePatch(opening);
     return opening;
+  }
+
+  validateAcousticObject(object) {
+    const attachment = object?.attachment;
+    if (!attachment) return object;
+    this.validatePatch({ id: object.id, ...attachment });
+    return object;
   }
 
   setDimensions(values = {}) {
@@ -85,6 +100,7 @@ class RectangularRoom {
     Object.assign(this.dimensions, next);
     try {
       for (const opening of this.openings) this.validateOpening(opening);
+      for (const object of this.acousticObjects) this.validateAcousticObject(object);
     } catch (error) {
       Object.assign(this.dimensions, previous);
       throw error;
@@ -121,21 +137,63 @@ class RectangularRoom {
     return opening;
   }
 
+  addAcousticObject(object) {
+    if (!object?.id || !object.geometry) throw new Error('Acoustic object requires id and geometry');
+    if (this.acousticObjects.some(item => item.id === object.id)) throw new Error(`Acoustic object already exists: ${object.id}`);
+    this.validateAcousticObject(object);
+    this.acousticObjects.push(object);
+    this.emit('acousticObjectAdded', { object });
+    return object;
+  }
+
+  updateAcousticObject(objectOrId, { attachment = undefined, acousticModel = undefined, materialProfile = undefined } = {}) {
+    const object = typeof objectOrId === 'string' ? this.acousticObjects.find(item => item.id === objectOrId) : objectOrId;
+    if (!object || !this.acousticObjects.includes(object)) throw new Error('Unknown acoustic object');
+    const previousAttachment = object.attachment ? { ...object.attachment } : null;
+    if (attachment !== undefined) object.setAttachment(attachment);
+    if (acousticModel !== undefined) object.setAcousticModel(acousticModel);
+    if (materialProfile !== undefined) object.setMaterialProfile(materialProfile);
+    try { this.validateAcousticObject(object); }
+    catch (error) { object.setAttachment(previousAttachment); throw error; }
+    this.emit('acousticObjectChanged', { object });
+    return object;
+  }
+
+  removeAcousticObject(objectOrId) {
+    const index = this.acousticObjects.findIndex(item => item === objectOrId || item.id === objectOrId);
+    if (index < 0) return null;
+    const [object] = this.acousticObjects.splice(index, 1);
+    this.emit('acousticObjectRemoved', { object });
+    return object;
+  }
+
   openingRect(openingOrId) {
     const opening = typeof openingOrId === 'string' ? this.openings.find(item => item.id === openingOrId) : openingOrId;
     if (!opening) throw new Error('Unknown room opening');
+    return this.patchRect(opening);
+  }
+
+  patchRect(patch) {
     const { width, height, depth } = this.dimensions;
-    const y = opening.sillHeight + opening.height / 2;
-    if (opening.wall === 'x-min' || opening.wall === 'x-max') {
+    const y = patch.sillHeight + patch.height / 2;
+    if (patch.wall === 'x-min' || patch.wall === 'x-max') {
       return {
-        center: [opening.wall === 'x-min' ? 0 : width, y, opening.offset + opening.width / 2],
-        size: [0, opening.height, opening.width],
+        center: [patch.wall === 'x-min' ? 0 : width, y, patch.offset + patch.width / 2],
+        size: [0, patch.height, patch.width],
+        normal: [patch.wall === 'x-min' ? 1 : -1, 0, 0],
       };
     }
     return {
-      center: [opening.offset + opening.width / 2, y, opening.wall === 'z-min' ? 0 : depth],
-      size: [opening.width, opening.height, 0],
+      center: [patch.offset + patch.width / 2, y, patch.wall === 'z-min' ? 0 : depth],
+      size: [patch.width, patch.height, 0],
+      normal: [0, 0, patch.wall === 'z-min' ? 1 : -1],
     };
+  }
+
+  acousticObjectRect(objectOrId) {
+    const object = typeof objectOrId === 'string' ? this.acousticObjects.find(item => item.id === objectOrId) : objectOrId;
+    if (!object?.attachment) return null;
+    return this.patchRect(object.attachment);
   }
 }
 
