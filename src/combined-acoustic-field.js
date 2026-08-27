@@ -74,7 +74,11 @@ class CombinedAcousticField {
   }
 
   fieldAtFrequency(frequencyHz) { return new FrequencySliceField({ owner: this, frequencyHz }); }
-  invalidate() { this.roomField.invalidate(); return this; }
+  invalidate() {
+    this.roomField.invalidate();
+    this.directField.invalidate();
+    return this;
+  }
 
   setModes(modes) {
     if (!Array.isArray(modes)) throw new Error('CombinedAcousticField modes must be an array');
