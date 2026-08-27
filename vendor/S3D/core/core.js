@@ -1,7 +1,7 @@
 // S3D host-independent runtime mechanics.
 // Pure exports only: no application semantics, DOM dependency or namespace mutation.
 
-const S3D_VERSION = '0.6.2';
+const S3D_VERSION = '0.6.3';
 
 class Scene {
   constructor() { this.objects = new Map(); this.layers = []; }
