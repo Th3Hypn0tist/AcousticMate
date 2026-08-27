@@ -6,9 +6,7 @@ function normalizedAnalysisRange(value = [20, 200]) {
   if (!Array.isArray(value) || value.length !== 2) throw new Error('AcousticRuntime analysis range must be [minHz,maxHz]');
   const minHz = Number(value[0]);
   const maxHz = Number(value[1]);
-  if (!Number.isFinite(minHz) || !Number.isFinite(maxHz) || minHz < 0 || maxHz < minHz) {
-    throw new Error('AcousticRuntime analysis range requires 0 <= minHz <= maxHz');
-  }
+  if (!Number.isFinite(minHz) || !Number.isFinite(maxHz) || minHz < 0 || maxHz < minHz) throw new Error('AcousticRuntime analysis range requires 0 <= minHz <= maxHz');
   return [minHz, maxHz];
 }
 
@@ -49,16 +47,16 @@ class AcousticRuntime {
     this.frequencyRange = range;
     this.combinedField.setFrequencyRange(range[0], range[1]);
     this.modes = this.modeSolver.solve(this.domain, range);
-    this.combinedField.modes = [...this.modes];
+    this.combinedField.setModes(this.modes);
     return this.invalidate();
   }
 
   syncRoom() {
     const nextDomain = AcousticDomain.fromRectangularRoom(this.room);
+    const nextModes = this.modeSolver.solve(nextDomain, this.frequencyRange);
     this.domain = nextDomain;
-    this.modes = this.modeSolver.solve(nextDomain, this.frequencyRange);
-    this.combinedField.setDomain(nextDomain);
-    this.combinedField.modes = [...this.modes];
+    this.modes = nextModes;
+    this.combinedField.setDomain(nextDomain).setModes(nextModes);
     return this.invalidate();
   }
 
