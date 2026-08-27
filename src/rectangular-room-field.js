@@ -15,11 +15,7 @@ function modeNormalization(mode, dimensions) {
 }
 
 function modalSourceCoupling(mode, speaker, dimensions, frequencyHz) {
-  const k = [
-    mode.nx * Math.PI / dimensions.width,
-    mode.ny * Math.PI / dimensions.height,
-    mode.nz * Math.PI / dimensions.depth,
-  ];
+  const k = [mode.nx * Math.PI / dimensions.width, mode.ny * Math.PI / dimensions.height, mode.nz * Math.PI / dimensions.depth];
   const activeAxes = k.map((value, index) => value ? index : -1).filter(index => index >= 0);
   if (!activeAxes.length) return [1, 0];
   const componentCount = 2 ** activeAxes.length;
@@ -113,7 +109,7 @@ class RectangularRoomField {
   buildModes() {
     const { width, height, depth } = this.dimensions;
     if (![width, height, depth].every(value => Number.isFinite(value) && value > 0)) throw new Error('Room dimensions must be positive');
-    if (!Number.isFinite(this.maxFrequency) || this.maxFrequency <= 0) throw new Error('maxFrequency must be positive');
+    if (!Number.isFinite(this.maxFrequency) || this.maxFrequency < 0) throw new Error('maxFrequency must be non-negative');
     const limits = [width, height, depth].map(length => Math.ceil(this.maxFrequency * 2 * length / this.speedOfSound));
     const modes = [];
     for (let nx = 0; nx <= limits[0]; nx++) for (let ny = 0; ny <= limits[1]; ny++) for (let nz = 0; nz <= limits[2]; nz++) {
@@ -124,34 +120,15 @@ class RectangularRoomField {
     return modes.sort((a, b) => a.frequency - b.frequency);
   }
 
-  invalidate() {
-    this.preparedModeCache.clear();
-    this.preparedModes = null;
-    return this;
-  }
+  invalidate() { this.preparedModeCache.clear(); this.preparedModes = null; return this; }
   rebuildModes() { this.modes = this.buildModes(); return this.invalidate(); }
-  setFrequency(value) {
-    value = Number(value);
-    if (!Number.isFinite(value) || value < 0) throw new Error('Frequency must be a finite non-negative value');
-    this.frequency = value;
-    this.preparedModes = this.preparedModeCache.get(value) ?? null;
-    return this;
-  }
+  setFrequency(value) { value = Number(value); if (!Number.isFinite(value) || value < 0) throw new Error('Frequency must be a finite non-negative value'); this.frequency = value; this.preparedModes = this.preparedModeCache.get(value) ?? null; return this; }
   setSpeakers(speakers) { this.speakers = speakers; return this.invalidate(); }
-  setCrossoverNetwork(value) {
-    if (value != null && typeof value.transferFor !== 'function') throw new Error('Crossover network must implement transferFor(speaker, frequencyHz)');
-    this.crossoverNetwork = value;
-    return this.invalidate();
-  }
+  setCrossoverNetwork(value) { if (value != null && typeof value.transferFor !== 'function') throw new Error('Crossover network must implement transferFor(speaker, frequencyHz)'); this.crossoverNetwork = value; return this.invalidate(); }
   setOpenings(openings = []) { this.openings = [...openings]; return this.invalidate(); }
   setAcousticObjects(acousticObjects = []) { this.acousticObjects = [...acousticObjects]; return this.invalidate(); }
   setDimensions(dimensions) { this.dimensions = { ...dimensions }; return this.rebuildModes(); }
-  setRoom(room) {
-    this.dimensions = { ...room.dimensions };
-    this.openings = [...room.openings];
-    this.acousticObjects = [...(room.acousticObjects ?? [])];
-    return this.rebuildModes();
-  }
+  setRoom(room) { this.dimensions = { ...room.dimensions }; this.openings = [...room.openings]; this.acousticObjects = [...(room.acousticObjects ?? [])]; return this.rebuildModes(); }
 
   speakerTransferAt(speaker, frequencyHz) {
     let local;
@@ -228,12 +205,7 @@ class RectangularRoomField {
   }
 
   sampleComplex(x, y, z) { return this.sampleComplexAtFrequency(x, y, z, this.frequency); }
-
-  sampleAtFrequency(x, y, z, frequencyHz) {
-    const [real, imaginary] = this.sampleComplexAtFrequency(x, y, z, frequencyHz);
-    return Math.hypot(real, imaginary);
-  }
-
+  sampleAtFrequency(x, y, z, frequencyHz) { const [real, imaginary] = this.sampleComplexAtFrequency(x, y, z, frequencyHz); return Math.hypot(real, imaginary); }
   sample(x, y, z) { return this.sampleAtFrequency(x, y, z, this.frequency); }
 }
 
