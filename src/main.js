@@ -1,13 +1,21 @@
 import { Scene, Box, PerspectiveCamera, Viewport, OrbitControls, PlaneDragController } from '../vendor/S3D/s3d.js';
-import { FrequencyRangeController, OrthogonalFieldSlices, SampledFieldPlane, SpeakerNode } from '../vendor/S3D/domains/acoustics/index.js';
+import { FieldViewRangeCoordinator, FrequencyRangeController, OrthogonalFieldSlices, SampledFieldPlane, SpeakerNode } from '../vendor/S3D/domains/acoustics/index.js';
 import { WebGUI } from '../vendor/WebGUI/webgui.js';
+import { AggregatedFrequencyField } from './aggregated-frequency-field.js';
 import { RectangularRoomField } from './rectangular-room-field.js';
 import { RectangularRoom } from './room.js';
 import { RoomEditor } from './room-editor.js';
 import { Speaker } from './speaker.js';
 import { SpeakerLibrary } from './speaker-library.js';
 import { SpeakerSet } from './speaker-set.js';
-import { applyClusterLayout, applyLineArrayLayout, applySubArrayLayout } from './speaker-set-layouts.js';
+import {
+  alignMembers,
+  applyClusterLayout,
+  applyLineArrayLayout,
+  applySubArrayLayout,
+  distributeMembers,
+  mirrorMembers,
+} from './speaker-set-layouts.js';
 import { eulerDegreesFromQuaternion, quaternionFromEulerDegrees } from './spatial.js';
 import { SignalChain } from './signal-chain.js';
 import { Delay, Gain, HighPassFilter, LowPassFilter, ParametricEQ, Polarity } from './signal-processors.js';
@@ -70,10 +78,20 @@ const editorOrigin = scene.add(new Box({
 const roomField = new RectangularRoomField({
   dimensions,
   openings: room.openings,
+  acousticObjects: room.acousticObjects,
   speakers,
   frequency: frequency.selectedHz,
   maxFrequency: frequency.maxHz,
 });
+
+const rangeField = new AggregatedFrequencyField({
+  field: roomField,
+  minHz: frequency.minHz,
+  maxHz: frequency.maxHz,
+  aggregation: 'rms',
+  samples: 12,
+});
+let rangeAggregation = 'rms';
 
 const field2DView = scene.add(new SampledFieldPlane({
   id: 'live-field-2d',
@@ -97,6 +115,13 @@ field3DView.visible = false;
 field3DView.dirty = false;
 let fieldViewMode = '2d';
 
+const fieldRangeCoordinator = new FieldViewRangeCoordinator({ views: [field2DView, field3DView] });
+scene.add({
+  id: 'field-range-coordinator',
+  visible: false,
+  update() { fieldRangeCoordinator.update(); },
+});
+
 function activeFieldViews() {
   if (fieldViewMode === 'both') return [field2DView, field3DView];
   return fieldViewMode === '3d' ? [field3DView] : [field2DView];
@@ -108,11 +133,36 @@ function setFieldViewMode(mode) {
   if (editorState.set || editorState.room) return;
   field2DView.visible = mode !== '3d';
   field3DView.visible = mode !== '2d';
+  fieldRangeCoordinator.invalidate();
   for (const view of activeFieldViews()) view.invalidate();
 }
 
 function invalidateField() {
   roomField.invalidate();
+  fieldRangeCoordinator.invalidate();
+  if (!editorState.set && !editorState.room) for (const view of activeFieldViews()) view.invalidate();
+}
+
+function ensureFrequencyCoverage() {
+  if (Math.abs(roomField.maxFrequency - frequency.maxHz) < 1e-9) return;
+  roomField.maxFrequency = frequency.maxHz;
+  roomField.rebuildModes();
+}
+
+function applyFrequencyMode() {
+  ensureFrequencyCoverage();
+  const isRange = frequency.mode === 'range';
+  if (isRange) {
+    rangeField.setRange(frequency.minHz, frequency.maxHz).setAggregation(rangeAggregation);
+    field2DView.setField(rangeField);
+    field3DView.setField(rangeField);
+  } else {
+    if (frequency.selectedHz == null) frequency.setSelectedFrequency((frequency.minHz + frequency.maxHz) / 2, false);
+    roomField.setFrequency(frequency.selectedHz);
+    field2DView.setField(roomField);
+    field3DView.setField(roomField);
+  }
+  fieldRangeCoordinator.invalidate();
   if (!editorState.set && !editorState.room) for (const view of activeFieldViews()) view.invalidate();
 }
 
@@ -146,12 +196,75 @@ const frequencySlider = gui.input({
   type: 'range', min: frequency.minHz, max: frequency.maxHz, step: .1, value: frequency.selectedHz,
   on: { input: event => frequency.setSelectedFrequency(Number(event.target.value)) },
 });
+const frequencyModeSelect = gui.select({
+  value: frequency.mode,
+  on: { change: event => frequency.setMode(event.target.value) },
+}, [gui.option('single', 'Single frequency'), gui.option('range', 'Frequency range')]);
+const rangeMinInput = gui.input({ type: 'number', min: 0, step: 1, value: frequency.minHz });
+const rangeMaxInput = gui.input({ type: 'number', min: 0, step: 1, value: frequency.maxHz });
+const rangeAggregationSelect = gui.select({
+  value: rangeAggregation,
+  on: { change: event => {
+    rangeAggregation = event.target.value;
+    rangeField.setAggregation(rangeAggregation);
+    if (frequency.mode === 'range') {
+      fieldRangeCoordinator.invalidate();
+      for (const view of activeFieldViews()) view.invalidate();
+    }
+  } },
+}, [
+  gui.option('peak', 'Peak'),
+  gui.option('rms', 'RMS'),
+  gui.option('energy', 'Energy'),
+  gui.option('sum', 'Sum'),
+]);
+const rangeSampleSelect = gui.select({
+  value: String(rangeField.samples),
+  on: { change: event => {
+    rangeField.setSampleCount(Number(event.target.value));
+    if (frequency.mode === 'range') {
+      fieldRangeCoordinator.invalidate();
+      for (const view of activeFieldViews()) view.invalidate();
+    }
+  } },
+}, [4, 8, 12, 16, 24].map(value => gui.option(String(value), String(value))));
+const singleFrequencyControls = gui.stack([frequencySlider, frequencyValue]);
+const rangeFrequencyControls = gui.stack([
+  gui.row([
+    gui.field('Min Hz', rangeMinInput, { className: 'compact-field' }),
+    gui.field('Max Hz', rangeMaxInput, { className: 'compact-field' }),
+  ]),
+  gui.field('Aggregation', rangeAggregationSelect, { className: 'compact-field' }),
+  gui.field('Frequency samples', rangeSampleSelect, { className: 'compact-field' }),
+]);
+
+function applyFrequencyControlVisibility() {
+  singleFrequencyControls.hidden = frequency.mode !== 'single';
+  rangeFrequencyControls.hidden = frequency.mode !== 'range';
+}
+
+function commitFrequencyRange() {
+  const minHz = Number(rangeMinInput.value);
+  const maxHz = Number(rangeMaxInput.value);
+  try {
+    frequency.setRange(minHz, maxHz);
+    rangeMinInput.removeAttribute('aria-invalid');
+    rangeMaxInput.removeAttribute('aria-invalid');
+  } catch (error) {
+    rangeMinInput.setAttribute('aria-invalid', 'true');
+    rangeMaxInput.setAttribute('aria-invalid', 'true');
+    rangeMaxInput.title = error.message;
+  }
+}
+rangeMinInput.addEventListener('change', commitFrequencyRange);
+rangeMaxInput.addEventListener('change', commitFrequencyRange);
+
 const speakerList = gui.stack([], { className: 'speaker-list' });
 const setList = gui.stack([], { className: 'speaker-list set-list' });
 const roomSummary = gui.h('span', { className: 'coordinates' });
 
 function updateRoomSummary() {
-  roomSummary.textContent = `${dimensions.width.toFixed(2)} × ${dimensions.depth.toFixed(2)} × ${dimensions.height.toFixed(2)} m · ${room.openings.length} openings`;
+  roomSummary.textContent = `${dimensions.width.toFixed(2)} × ${dimensions.depth.toFixed(2)} × ${dimensions.height.toFixed(2)} m · ${room.openings.length} openings · ${(room.acousticObjects ?? []).length} treatments`;
 }
 
 function numberControl(label, value, { min, max, step = .1, update, invalidate = true } = {}) {
@@ -196,6 +309,7 @@ function sliceCountControl(label, axis, value = 1) {
       const next = Number(event.target.value);
       output.textContent = String(next);
       field3DView.setSliceCount(axis, next);
+      fieldRangeCoordinator.invalidate();
     } },
   });
   return gui.field(label, gui.stack([input, output]), { className: 'slice-control' });
@@ -459,6 +573,7 @@ function refreshSceneMode() {
   editorOrigin.visible = Boolean(editedSet);
   field2DView.visible = !editedSet && !editingRoom && fieldViewMode !== '3d';
   field3DView.visible = !editedSet && !editingRoom && fieldViewMode !== '2d';
+  fieldRangeCoordinator.invalidate();
   for (const set of speakerSets) set.node.visible = !editedSet && !editingRoom;
   for (const speaker of speakers) syncSpeakerNode(speaker);
 }
@@ -533,6 +648,23 @@ function typeHelperControls(set) {
   return gui.h('p', { className: 'hint', text: 'Generic set: edit member transforms freely.' });
 }
 
+function commonSetHelperControls(set) {
+  const apply = operation => {
+    operation();
+    renderSetEditor(set);
+    invalidateField();
+  };
+  return gui.h('details', { className: 'signal-chain' }, [
+    gui.h('summary', { text: 'Align · distribute · mirror' }),
+    gui.h('h3', { text: 'Align members' }),
+    gui.row([0, 1, 2].map((axis, index) => gui.button(`Align ${['X', 'Y', 'Z'][index]}`, { on: { click: () => apply(() => alignMembers(set, { axis })) } })), { className: 'button-row' }),
+    gui.h('h3', { text: 'Distribute members' }),
+    gui.row([0, 1, 2].map((axis, index) => gui.button(`Distribute ${['X', 'Y', 'Z'][index]}`, { on: { click: () => apply(() => distributeMembers(set, { axis })) } })), { className: 'button-row' }),
+    gui.h('h3', { text: 'Mirror local geometry' }),
+    gui.row([0, 1, 2].map((axis, index) => gui.button(`Mirror ${['X', 'Y', 'Z'][index]}`, { on: { click: () => apply(() => mirrorMembers(set, { axis })) } })), { className: 'button-row' }),
+  ]);
+}
+
 function suggestedModelType(set) {
   if (set.type === 'line-array') return 'line-array-element';
   if (set.type === 'sub-array') return 'subwoofer';
@@ -555,6 +687,7 @@ function renderSetEditor(set = editorState.set) {
     gui.button('← Back to visualizer', { on: { click: closeSetEditor } }),
     gui.h('div', { className: 'library-add' }, [gui.field('Speaker model', select), add]),
     typeHelperControls(set),
+    commonSetHelperControls(set),
     gui.h('div', { className: 'member-list' }, set.members.map(member => memberEditor(set, member))),
     gui.h('p', { className: 'hint', text: 'Drag members in the 3D preview for local X/Z. Shift+drag changes local Y. Numeric controls set exact local position and orientation.' }),
   ]);
@@ -619,6 +752,7 @@ const roomEditor = new RoomEditor({
   room,
   scene,
   camera,
+  canvas,
   roomOutline,
   field2DView,
   field3DView,
@@ -646,12 +780,27 @@ const roomEditor = new RoomEditor({
 });
 
 frequency.on('selectedFrequencyChanged', state => {
+  if (state.selectedHz == null) return;
   frequencyValue.textContent = `${state.selectedHz.toFixed(1)} Hz`;
-  roomField.setFrequency(state.selectedHz);
-  if (!editorState.set && !editorState.room) for (const view of activeFieldViews()) view.invalidate();
+  frequencySlider.value = String(state.selectedHz);
+  if (frequency.mode === 'single') applyFrequencyMode();
+});
+frequency.on('rangeChanged', state => {
+  rangeMinInput.value = String(state.minHz);
+  rangeMaxInput.value = String(state.maxHz);
+  frequencySlider.min = String(state.minHz);
+  frequencySlider.max = String(state.maxHz);
+  if (state.selectedHz == null && frequency.mode === 'single') frequency.setSelectedFrequency((state.minHz + state.maxHz) / 2, false);
+  applyFrequencyMode();
+});
+frequency.on('modeChanged', () => {
+  applyFrequencyControlVisibility();
+  applyFrequencyMode();
 });
 
 updateRoomSummary();
+applyFrequencyControlVisibility();
+applyFrequencyMode();
 
 gui.mount(mainPanel, [
   gui.h('header', {}, [gui.h('h1', { text: 'AcousticMate' }), gui.h('p', { text: 'Live room-mode field' })]),
@@ -660,7 +809,9 @@ gui.mount(mainPanel, [
     roomSummary,
     gui.button('Edit room', { on: { click: () => roomEditor.open() } }),
   ]),
-  gui.field('Frequency', gui.stack([frequencySlider, frequencyValue])),
+  gui.field('Analysis mode', frequencyModeSelect),
+  gui.field('Frequency', singleFrequencyControls),
+  rangeFrequencyControls,
   fieldViewSelector,
   sliceControls,
   gui.h('h2', { text: 'Speakers' }),
@@ -679,6 +830,7 @@ refreshSceneMode();
 globalThis.acousticMateStarted = true;
 
 globalThis.addEventListener('beforeunload', () => {
+  roomEditor.destroy?.();
   drag.destroy();
   orbit.destroy();
   viewport.destroy();
