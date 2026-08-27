@@ -36,3 +36,22 @@ test('SpeakerSet member trims alter transfer without changing speaker identity',
   assert.equal(set.memberForSpeaker(memberSpeaker).speaker, memberSpeaker);
   assert.ok(Math.hypot(...after) < Math.hypot(...before));
 });
+
+test('SpeakerSet moveMember changes element order without changing member identity', () => {
+  const set = new SpeakerSet({ id: 'line-array', type: 'line-array' });
+  const a = speaker('a');
+  const b = speaker('b');
+  const c = speaker('c');
+  const memberA = set.addMember({ speaker: a });
+  const memberB = set.addMember({ speaker: b });
+  const memberC = set.addMember({ speaker: c });
+  let event = null;
+  set.on('memberOrderChanged', value => { event = value; });
+  set.moveMember(memberC, 0);
+  assert.deepEqual(set.members.map(member => member.speaker.id), ['c', 'a', 'b']);
+  assert.equal(set.members[0], memberC);
+  assert.equal(set.members[1], memberA);
+  assert.equal(set.members[2], memberB);
+  assert.equal(event.fromIndex, 2);
+  assert.equal(event.toIndex, 0);
+});
