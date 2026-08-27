@@ -39,31 +39,35 @@ function modalSourceCoupling(mode, speaker, dimensions, frequencyHz) {
   return [real / componentCount, imaginary / componentCount];
 }
 
-function openingPoint(opening, u, v, dimensions) {
-  const along = opening.offset + opening.width * u;
-  const y = opening.sillHeight + opening.height * v;
-  if (opening.wall === 'x-min') return [0, y, along];
-  if (opening.wall === 'x-max') return [dimensions.width, y, along];
-  if (opening.wall === 'z-min') return [along, y, 0];
-  if (opening.wall === 'z-max') return [along, y, dimensions.depth];
-  throw new Error(`Unsupported opening wall: ${opening.wall}`);
+function boundaryPoint(patch, u, v, dimensions) {
+  const along = patch.offset + patch.width * u;
+  const y = patch.sillHeight + patch.height * v;
+  if (patch.wall === 'x-min') return [0, y, along];
+  if (patch.wall === 'x-max') return [dimensions.width, y, along];
+  if (patch.wall === 'z-min') return [along, y, 0];
+  if (patch.wall === 'z-max') return [along, y, dimensions.depth];
+  throw new Error(`Unsupported boundary wall: ${patch.wall}`);
 }
 
-function openingModeEffectiveArea(mode, opening, dimensions, grid = 4) {
-  if (opening?.type !== 'open') return 0;
+function boundaryModeEffectiveArea(mode, patch, dimensions, coefficient = 1, grid = 4) {
+  if (!patch) return 0;
   const count = Math.max(1, Math.floor(Number(grid) || 1));
   let sum = 0;
   for (let iv = 0; iv < count; iv++) for (let iu = 0; iu < count; iu++) {
-    const point = openingPoint(opening, (iu + .5) / count, (iv + .5) / count, dimensions);
+    const point = boundaryPoint(patch, (iu + .5) / count, (iv + .5) / count, dimensions);
     const value = modeShape(mode, point, dimensions);
     sum += value * value;
   }
   const meanBoundarySquared = sum / (count * count);
   const multiplicity = (mode.nx ? 2 : 1) * (mode.ny ? 2 : 1) * (mode.nz ? 2 : 1);
   const normalizedBoundaryIntensity = multiplicity * meanBoundarySquared;
-  const area = Number(opening.width) * Number(opening.height);
-  const transmission = Math.max(0, Math.min(1, Number(opening.transmission ?? 1)));
-  return area * transmission * normalizedBoundaryIntensity;
+  const area = Number(patch.width) * Number(patch.height);
+  return area * Math.max(0, Math.min(1, Number(coefficient) || 0)) * normalizedBoundaryIntensity;
+}
+
+function openingModeEffectiveArea(mode, opening, dimensions, grid = 4) {
+  if (opening?.type !== 'open') return 0;
+  return boundaryModeEffectiveArea(mode, opening, dimensions, opening.transmission ?? 1, grid);
 }
 
 function openingInverseQ(mode, openings, dimensions, speedOfSound = SPEED_OF_SOUND) {
@@ -71,16 +75,28 @@ function openingInverseQ(mode, openings, dimensions, speedOfSound = SPEED_OF_SOU
   const volume = dimensions.width * dimensions.height * dimensions.depth;
   const omegaMode = 2 * Math.PI * mode.frequency;
   const effectiveArea = openings.reduce((total, opening) => total + openingModeEffectiveArea(mode, opening, dimensions), 0);
-  // Perfectly open boundary approximation: modal energy crossing an aperture leaves
-  // the solved room and is not reflected or propagated into an exterior domain.
-  // This is a low-frequency damping approximation, not an exterior radiation solve.
+  return speedOfSound * effectiveArea / (4 * omegaMode * volume);
+}
+
+function acousticObjectInverseQ(mode, acousticObjects, dimensions, speedOfSound = SPEED_OF_SOUND) {
+  if (!acousticObjects?.length || mode.frequency <= 0) return 0;
+  const volume = dimensions.width * dimensions.height * dimensions.depth;
+  const omegaMode = 2 * Math.PI * mode.frequency;
+  let effectiveArea = 0;
+  for (const object of acousticObjects) {
+    if (!object?.attachment) continue;
+    const absorption = typeof object.absorptionAt === 'function' ? object.absorptionAt(mode.frequency) : 0;
+    if (absorption <= 0) continue;
+    effectiveArea += boundaryModeEffectiveArea(mode, object.attachment, dimensions, absorption);
+  }
   return speedOfSound * effectiveArea / (4 * omegaMode * volume);
 }
 
 class RectangularRoomField {
-  constructor({ dimensions, openings = [], speakers = [], frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
+  constructor({ dimensions, openings = [], acousticObjects = [], speakers = [], frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
     this.dimensions = { ...dimensions };
     this.openings = [...openings];
+    this.acousticObjects = [...acousticObjects];
     this.speakers = speakers;
     this.frequency = Number(frequency);
     this.maxFrequency = Number(maxFrequency);
@@ -109,8 +125,14 @@ class RectangularRoomField {
   setFrequency(value) { this.frequency = Number(value); return this.invalidate(); }
   setSpeakers(speakers) { this.speakers = speakers; return this.invalidate(); }
   setOpenings(openings = []) { this.openings = [...openings]; return this.invalidate(); }
+  setAcousticObjects(acousticObjects = []) { this.acousticObjects = [...acousticObjects]; return this.invalidate(); }
   setDimensions(dimensions) { this.dimensions = { ...dimensions }; return this.rebuildModes(); }
-  setRoom(room) { this.dimensions = { ...room.dimensions }; this.openings = [...room.openings]; return this.rebuildModes(); }
+  setRoom(room) {
+    this.dimensions = { ...room.dimensions };
+    this.openings = [...room.openings];
+    this.acousticObjects = [...(room.acousticObjects ?? [])];
+    return this.rebuildModes();
+  }
 
   speakerTransfer(speaker) {
     if (typeof speaker.transferAt === 'function') return speaker.transferAt(this.frequency);
@@ -132,7 +154,8 @@ class RectangularRoomField {
       const denominatorReal = omegaMode * omegaMode - omega * omega;
       const baseInverseQ = 1 / this.q;
       const leakInverseQ = openingInverseQ(mode, this.openings, this.dimensions, this.speedOfSound);
-      const effectiveInverseQ = baseInverseQ + leakInverseQ;
+      const treatmentInverseQ = acousticObjectInverseQ(mode, this.acousticObjects, this.dimensions, this.speedOfSound);
+      const effectiveInverseQ = baseInverseQ + leakInverseQ + treatmentInverseQ;
       const denominatorImaginary = omegaMode * omega * effectiveInverseQ;
       const denominatorMagnitude = denominatorReal ** 2 + denominatorImaginary ** 2 || 1;
       const roomReal = denominatorReal / denominatorMagnitude;
@@ -151,6 +174,7 @@ class RectangularRoomField {
         mode,
         inverseQ: effectiveInverseQ,
         openingInverseQ: leakInverseQ,
+        treatmentInverseQ,
         real: sourceReal * roomReal - sourceImaginary * roomImaginary,
         imaginary: sourceReal * roomImaginary + sourceImaginary * roomReal,
       };
@@ -182,7 +206,9 @@ export {
   modalSourceCoupling,
   modeNormalization,
   modeShape,
+  boundaryModeEffectiveArea,
   openingModeEffectiveArea,
   openingInverseQ,
+  acousticObjectInverseQ,
   SPEED_OF_SOUND,
 };
