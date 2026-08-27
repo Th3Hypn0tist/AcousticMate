@@ -103,6 +103,7 @@ class RectangularRoomField {
     this.q = Number(q);
     this.speedOfSound = Number(speedOfSound);
     this.modes = this.buildModes();
+    this.preparedModeCache = new Map();
     this.preparedModes = null;
   }
 
@@ -120,9 +121,19 @@ class RectangularRoomField {
     return modes.sort((a, b) => a.frequency - b.frequency);
   }
 
-  invalidate() { this.preparedModes = null; return this; }
+  invalidate() {
+    this.preparedModeCache.clear();
+    this.preparedModes = null;
+    return this;
+  }
   rebuildModes() { this.modes = this.buildModes(); return this.invalidate(); }
-  setFrequency(value) { this.frequency = Number(value); return this.invalidate(); }
+  setFrequency(value) {
+    value = Number(value);
+    if (!Number.isFinite(value) || value < 0) throw new Error('Frequency must be a finite non-negative value');
+    this.frequency = value;
+    this.preparedModes = this.preparedModeCache.get(value) ?? null;
+    return this;
+  }
   setSpeakers(speakers) { this.speakers = speakers; return this.invalidate(); }
   setOpenings(openings = []) { this.openings = [...openings]; return this.invalidate(); }
   setAcousticObjects(acousticObjects = []) { this.acousticObjects = [...acousticObjects]; return this.invalidate(); }
@@ -134,22 +145,27 @@ class RectangularRoomField {
     return this.rebuildModes();
   }
 
-  speakerTransfer(speaker) {
-    if (typeof speaker.transferAt === 'function') return speaker.transferAt(this.frequency);
+  speakerTransferAt(speaker, frequencyHz) {
+    if (typeof speaker.transferAt === 'function') return speaker.transferAt(frequencyHz);
     const gain = 10 ** (Number(speaker.gainDb ?? 0) / 20);
     const polarity = speaker.polarityInverted ? Math.PI : 0;
-    const delay = -2 * Math.PI * this.frequency * Number(speaker.delayMs ?? 0) / 1000;
+    const delay = -2 * Math.PI * frequencyHz * Number(speaker.delayMs ?? 0) / 1000;
     const phase = polarity + delay;
     return [gain * Math.cos(phase), gain * Math.sin(phase)];
   }
 
-  prepareModes() {
-    if (this.preparedModes) return this.preparedModes;
-    const omega = 2 * Math.PI * this.frequency;
+  speakerTransfer(speaker) { return this.speakerTransferAt(speaker, this.frequency); }
+
+  prepareModesAt(frequencyHz = this.frequency) {
+    frequencyHz = Number(frequencyHz);
+    if (!Number.isFinite(frequencyHz) || frequencyHz < 0) throw new Error('Frequency must be a finite non-negative value');
+    const cached = this.preparedModeCache.get(frequencyHz);
+    if (cached) return cached;
+    const omega = 2 * Math.PI * frequencyHz;
     const speakers = this.speakers
       .filter(speaker => typeof speaker.isAcousticallyEnabled === 'function' ? speaker.isAcousticallyEnabled() : speaker.enabled !== false)
-      .map(speaker => ({ speaker, transfer: this.speakerTransfer(speaker) }));
-    this.preparedModes = this.modes.map(mode => {
+      .map(speaker => ({ speaker, transfer: this.speakerTransferAt(speaker, frequencyHz) }));
+    const preparedModes = this.modes.map(mode => {
       const omegaMode = 2 * Math.PI * mode.frequency;
       const denominatorReal = omegaMode * omegaMode - omega * omega;
       const baseInverseQ = 1 / this.q;
@@ -164,7 +180,7 @@ class RectangularRoomField {
       let sourceImaginary = 0;
       const normalization = modeNormalization(mode, this.dimensions);
       for (const { speaker, transfer } of speakers) {
-        const [couplingRealRaw, couplingImaginaryRaw] = modalSourceCoupling(mode, speaker, this.dimensions, this.frequency);
+        const [couplingRealRaw, couplingImaginaryRaw] = modalSourceCoupling(mode, speaker, this.dimensions, frequencyHz);
         const couplingReal = couplingRealRaw * normalization;
         const couplingImaginary = couplingImaginaryRaw * normalization;
         sourceReal += couplingReal * transfer[0] - couplingImaginary * transfer[1];
@@ -179,26 +195,33 @@ class RectangularRoomField {
         imaginary: sourceReal * roomImaginary + sourceImaginary * roomReal,
       };
     });
-    return this.preparedModes;
+    this.preparedModeCache.set(frequencyHz, preparedModes);
+    if (frequencyHz === this.frequency) this.preparedModes = preparedModes;
+    return preparedModes;
   }
 
-  sampleComplex(x, y, z) {
+  prepareModes() { return this.prepareModesAt(this.frequency); }
+
+  sampleComplexAtFrequency(x, y, z, frequencyHz) {
     const point = [x, y, z];
     let real = 0;
     let imaginary = 0;
-    for (const prepared of this.prepareModes()) {
-      const { mode } = prepared;
-      const atPoint = modeShape(mode, point, this.dimensions);
+    for (const prepared of this.prepareModesAt(frequencyHz)) {
+      const atPoint = modeShape(prepared.mode, point, this.dimensions);
       real += atPoint * prepared.real;
       imaginary += atPoint * prepared.imaginary;
     }
     return [real, imaginary];
   }
 
-  sample(x, y, z) {
-    const [real, imaginary] = this.sampleComplex(x, y, z);
+  sampleComplex(x, y, z) { return this.sampleComplexAtFrequency(x, y, z, this.frequency); }
+
+  sampleAtFrequency(x, y, z, frequencyHz) {
+    const [real, imaginary] = this.sampleComplexAtFrequency(x, y, z, frequencyHz);
     return Math.hypot(real, imaginary);
   }
+
+  sample(x, y, z) { return this.sampleAtFrequency(x, y, z, this.frequency); }
 }
 
 export {
