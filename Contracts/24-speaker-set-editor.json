@@ -1,7 +1,7 @@
 {
   "module": "SpeakerSetEditor",
   "scope": "App",
-  "purpose": "Dedicated editor workspace for configuring member-local geometry of a SpeakerSet before returning to the main acoustic visualizer",
+  "purpose": "Dedicated editor workspace for configuring member-local geometry and member processing of a SpeakerSet before returning to the main acoustic visualizer",
   "inputs": {
     "set": "SpeakerSet",
     "speakerLibrary": "SpeakerModel[]"
@@ -12,14 +12,17 @@
     "edit local X/Y/Z",
     "edit local yaw/pitch/roll or equivalent orientation",
     "duplicate members",
+    "reorder members",
+    "edit member gain and delay trims",
     "mirror members",
     "align/distribute members",
+    "edit set signal chain",
     "type-specific geometry helpers"
   ],
   "typeSpecific": {
     "line-array": ["element count/order", "spacing", "splay angles", "array tilt", "curvature"],
     "cluster": ["free positions", "free orientations"],
-    "sub-array": ["spacing", "arc/radius", "member processing trims"],
+    "sub-array": ["element count", "spacing", "arc/radius", "member processing trims"],
     "generic": ["free positions", "free orientations"]
   },
   "flow": [
@@ -30,9 +33,10 @@
     "return to the main visualizer where the complete set is manipulated through its parent transform"
   ],
   "rules": [
-    "the editor changes SpeakerSet structure and member-local transforms; it is not a separate acoustic model",
+    "the editor changes SpeakerSet structure, member-local transforms and explicit member processing; it is not a separate acoustic model",
     "the main visualizer may treat a set as one manipulation target while acoustic calculation still evaluates its individual Speaker members",
-    "editing a member inside the set editor must not destroy its model reference or signal-chain identity",
-    "type-specific helpers are optional conveniences layered on the generic set editor"
+    "editing or reordering a member inside the set editor must not destroy its model reference, Speaker identity or signal-chain identity",
+    "member delay/gain trims compose with the Speaker and SpeakerSet signal chains",
+    "type-specific helpers are conveniences layered on the generic set editor"
   ]
 }
