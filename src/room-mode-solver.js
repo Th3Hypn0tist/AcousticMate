@@ -27,20 +27,16 @@ class RoomModeSolver {
 
   strategyFor(domain) {
     const dimensions = domain?.dimensions;
-    return dimensions?.width > 0 && dimensions?.height > 0 && dimensions?.depth > 0 && domain?.geometryType !== 'arbitrary'
-      ? 'analytical'
-      : 'numerical';
+    return dimensions?.width > 0 && dimensions?.height > 0 && dimensions?.depth > 0 && domain?.geometryType !== 'arbitrary' ? 'analytical' : 'numerical';
   }
 
   solve(domain, frequencyRange = [20, 200]) {
     const strategy = this.strategyFor(domain);
-    if (strategy === 'numerical') {
-      throw new Error('Numerical arbitrary-geometry eigenmode solving is outside the current AcousticMate start scope');
-    }
+    if (strategy === 'numerical') throw new Error('Numerical arbitrary-geometry eigenmode solving is outside the current AcousticMate start scope');
     const [minHzRaw, maxHzRaw] = frequencyRange;
     const minHz = Number(minHzRaw);
     const maxHz = Number(maxHzRaw);
-    if (![minHz, maxHz].every(Number.isFinite) || minHz < 0 || maxHz <= minHz) throw new Error('RoomModeSolver frequencyRange requires 0 <= min < max');
+    if (![minHz, maxHz].every(Number.isFinite) || minHz < 0 || maxHz < minHz) throw new Error('RoomModeSolver frequencyRange requires 0 <= min <= max');
     const { width, height, depth } = domain.dimensions;
     const limits = [width, height, depth].map(length => Math.ceil(maxHz * 2 * length / this.speedOfSound));
     const modes = [];
