@@ -18,7 +18,7 @@ function logarithmicTransitionWeight(frequencyHz, startHz = 20, endHz = 500, min
 }
 
 class HybridAcousticField {
-  constructor({ modalField, directField, transitionStartHz = 20, transitionEndHz = 500, minimumDirectWeight = .22 } = {}) {
+  constructor({ modalField, directField, transitionStartHz = 20, transitionEndHz = 500, minimumDirectWeight = .22, endpointEpsilon = 1e-6 } = {}) {
     if (!modalField?.sampleComplexAtFrequency) throw new Error('HybridAcousticField requires a modalField with sampleComplexAtFrequency()');
     if (!directField?.sampleComplexAtFrequency) throw new Error('HybridAcousticField requires a directField with sampleComplexAtFrequency()');
     this.modalField = modalField;
@@ -26,6 +26,7 @@ class HybridAcousticField {
     this.transitionStartHz = Number(transitionStartHz);
     this.transitionEndHz = Number(transitionEndHz);
     this.minimumDirectWeight = Number(minimumDirectWeight);
+    this.endpointEpsilon = Math.max(0, Number(endpointEpsilon) || 0);
     this.range = [0, Infinity];
     this.frequency = null;
     this.frequencyRange = null;
@@ -37,15 +38,22 @@ class HybridAcousticField {
   }
 
   sampleComponentsComplexAtFrequency(x, y, z, frequencyHz) {
-    return {
-      modal: this.modalField.sampleComplexAtFrequency(x, y, z, frequencyHz),
-      direct: this.directField.sampleComplexAtFrequency(x, y, z, frequencyHz),
-      weights: this.weightsAt(frequencyHz),
-    };
+    const weights = this.weightsAt(frequencyHz);
+    const modal = weights.modal <= this.endpointEpsilon
+      ? [0, 0]
+      : this.modalField.sampleComplexAtFrequency(x, y, z, frequencyHz);
+    const direct = weights.direct <= this.endpointEpsilon
+      ? [0, 0]
+      : this.directField.sampleComplexAtFrequency(x, y, z, frequencyHz);
+    return { modal, direct, weights };
   }
 
   sampleComplexAtFrequency(x, y, z, frequencyHz) {
-    const { modal, direct, weights } = this.sampleComponentsComplexAtFrequency(x, y, z, frequencyHz);
+    const weights = this.weightsAt(frequencyHz);
+    if (weights.modal <= this.endpointEpsilon) return this.directField.sampleComplexAtFrequency(x, y, z, frequencyHz);
+    if (weights.direct <= this.endpointEpsilon) return this.modalField.sampleComplexAtFrequency(x, y, z, frequencyHz);
+    const modal = this.modalField.sampleComplexAtFrequency(x, y, z, frequencyHz);
+    const direct = this.directField.sampleComplexAtFrequency(x, y, z, frequencyHz);
     return Complex.add(
       [modal[0] * weights.modal, modal[1] * weights.modal],
       [direct[0] * weights.direct, direct[1] * weights.direct],
