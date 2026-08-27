@@ -9,7 +9,7 @@ function basis(runtime) {
   return runtime.modes.map(mode => ({ nx: mode.indices.nx, ny: mode.indices.ny, nz: mode.indices.nz, frequency: mode.frequency }));
 }
 
-test('AcousticRuntime owns domain modes and combined field orchestration', () => {
+test('AcousticRuntime owns domain modes and hybrid combined field orchestration', () => {
   const room = new RectangularRoom({ width: 6, height: 2.7, depth: 4.5 });
   const speakers = [new Speaker({ id: 'speaker-1', position: [1, .5, 1] })];
   const runtime = new AcousticRuntime({ room, speakers, crossoverNetwork: new CrossoverNetwork(), frequencyRange: [20, 100] });
@@ -17,15 +17,27 @@ test('AcousticRuntime owns domain modes and combined field orchestration', () =>
   assert.equal(runtime.combinedField.domain, runtime.domain);
   assert.equal(runtime.frequencyField, runtime.combinedField.frequencyField);
   assert.equal(runtime.roomField, runtime.combinedField.roomField);
+  assert.equal(runtime.directField, runtime.combinedField.directField);
+  assert.equal(runtime.hybridField, runtime.combinedField.hybridField);
   assert.deepEqual(runtime.roomField.modes, basis(runtime));
   assert.ok(Number.isFinite(runtime.fieldAtFrequency(50).sample(2, 1, 2)));
 });
 
-test('modal basis coverage starts at zero instead of analysis minimum', () => {
-  assert.deepEqual(modalCoverageRange([100, 140]), [0, 140]);
-  const runtime = new AcousticRuntime({ room: new RectangularRoom({ width: 10, height: 3, depth: 8 }), frequencyRange: [100, 140] });
+test('modal basis keeps headroom but is capped independently from analysis frequency', () => {
+  assert.deepEqual(modalCoverageRange([58, 58], 300), [0, 120]);
+  assert.deepEqual(modalCoverageRange([100, 140], 300), [0, 280]);
+  assert.deepEqual(modalCoverageRange([20000, 20000], 300), [0, 300]);
+  const runtime = new AcousticRuntime({ room: new RectangularRoom({ width: 10, height: 3, depth: 8 }), frequencyRange: [100, 140], modalBasisMaxHz: 300 });
   assert.ok(runtime.modes.some(mode => mode.frequency < 100), 'Expected lower room modes to remain in the modal basis');
-  assert.ok(runtime.modes.every(mode => mode.frequency <= 140));
+  assert.ok(runtime.modes.every(mode => mode.frequency <= 280));
+});
+
+test('20 kHz navigation never expands modal basis above configured cap', () => {
+  const runtime = new AcousticRuntime({ room: new RectangularRoom(), frequencyRange: [58, 58], modalBasisMaxHz: 300 });
+  runtime.setFrequencyRange(20000, 20000);
+  assert.deepEqual(runtime.frequencyRange, [20000, 20000]);
+  assert.deepEqual(runtime.modalCoverage, [0, 300]);
+  assert.ok(runtime.modes.every(mode => mode.frequency <= 300));
 });
 
 test('AcousticRuntime refreshes sources through CombinedAcousticField', () => {
@@ -53,14 +65,13 @@ test('AcousticRuntime rebuilds domain and modal basis when room changes', () => 
   assert.deepEqual(runtime.roomField.modes, basis(runtime));
 });
 
-test('AcousticRuntime accepts a single-point analysis range while retaining modal coverage below it', () => {
+test('single-point analysis range remains separate from modal coverage', () => {
   const runtime = new AcousticRuntime({ room: new RectangularRoom(), frequencyRange: [50, 50] });
   assert.deepEqual(runtime.frequencyRange, [50, 50]);
-  assert.ok(runtime.modes.every(mode => mode.frequency <= 50));
+  assert.deepEqual(runtime.modalCoverage, [0, 120]);
   assert.deepEqual(runtime.roomField.modes, basis(runtime));
   runtime.setFrequencyRange(60, 60);
   assert.deepEqual(runtime.frequencyRange, [60, 60]);
-  assert.equal(runtime.roomField.maxFrequency, 60);
-  assert.ok(runtime.modes.every(mode => mode.frequency <= 60));
+  assert.deepEqual(runtime.modalCoverage, [0, 120]);
   assert.deepEqual(runtime.roomField.modes, basis(runtime));
 });
