@@ -30,11 +30,20 @@ class RoomGeometryWorkflow {
     };
     this.syncMeasurementsFromRoom();
     this.room.on('geometryChanged', () => this.syncFromRoom());
-    this.polygonEditor.on('geometryChanged', () => this.emit('geometryChanged', { polygon: this.polygonEditor.toPolygon() }));
+    this.polygonEditor.on('geometryChanged', () => {
+      this.syncVolumeFromPolygon();
+      this.emit('geometryChanged', { polygon: this.polygonEditor.toPolygon() });
+    });
   }
 
   on(event, listener) { const set = this.listeners.get(event) ?? new Set(); set.add(listener); this.listeners.set(event, set); return () => set.delete(listener); }
   emit(event, detail = {}) { for (const listener of this.listeners.get(event) ?? []) listener({ type: event, target: this, ...detail }); }
+
+  syncVolumeFromPolygon() {
+    const polygon = this.polygonEditor.toPolygon();
+    if (polygon.closed && polygon.vertices.length >= 3) this.volume.setPolygon(this.polygonEditor).setHeight(this.room.dimensions.height);
+    return this;
+  }
 
   syncMeasurementsFromRoom() {
     const { width, depth } = this.room.dimensions;
@@ -109,6 +118,63 @@ class RoomGeometryWorkflow {
 
   setReferenceOpacity(value) { this.referenceLayer.setOpacity(value); this.emit('referenceChanged', { opacity: this.referenceLayer.opacity }); return this; }
 
+  addVertex(value, index = this.polygonEditor.vertices.length) {
+    const vertex = this.polygonEditor.addVertex(value, index);
+    this.emit('topologyChanged', { operation: 'add', vertex, polygon: this.polygonEditor.toPolygon() });
+    return vertex;
+  }
+
+  insertVertex(afterVertexOrId, value) {
+    const vertex = this.polygonEditor.insertVertex(afterVertexOrId, value);
+    this.emit('topologyChanged', { operation: 'insert', vertex, polygon: this.polygonEditor.toPolygon() });
+    return vertex;
+  }
+
+  removeVertex(vertexOrId) {
+    const vertex = this.polygonEditor.removeVertex(vertexOrId);
+    this.pruneInvalidMeasurements();
+    this.emit('topologyChanged', { operation: 'remove', vertex, polygon: this.polygonEditor.toPolygon() });
+    return vertex;
+  }
+
+  undo() {
+    const changed = this.polygonEditor.undo();
+    if (changed) {
+      this.pruneInvalidMeasurements();
+      this.syncVolumeFromPolygon();
+      this.emit('historyChanged', { operation: 'undo', polygon: this.polygonEditor.toPolygon() });
+    }
+    return changed;
+  }
+
+  redo() {
+    const changed = this.polygonEditor.redo();
+    if (changed) {
+      this.pruneInvalidMeasurements();
+      this.syncVolumeFromPolygon();
+      this.emit('historyChanged', { operation: 'redo', polygon: this.polygonEditor.toPolygon() });
+    }
+    return changed;
+  }
+
+  vertexAnchor(vertexOrId) {
+    const vertex = this.polygonEditor.vertex(vertexOrId);
+    return { type: 'vertex', target: vertex.id };
+  }
+
+  edgeAnchor(edgeOrId, t = .5) {
+    const edge = typeof edgeOrId === 'string' ? this.polygonEditor.edges().find(item => item.id === edgeOrId) : edgeOrId;
+    if (!edge || !this.polygonEditor.edges().some(item => item.id === edge.id)) throw new Error('Unknown polygon edge');
+    t = Number(t);
+    if (!Number.isFinite(t)) throw new Error('Edge anchor t must be finite');
+    return { type: 'edge', target: edge.id, t: Math.max(0, Math.min(1, t)) };
+  }
+
+  freeAnchor(position) {
+    if (!Array.isArray(position) || position.length !== 2 || !position.every(Number.isFinite)) throw new Error('Free anchor requires [x,z]');
+    return { type: 'free', position: [...position] };
+  }
+
   measurement(id) {
     const measurement = this.measurements.find(item => item.id === id);
     if (!measurement) throw new Error(`Unknown room measurement: ${id}`);
@@ -166,6 +232,22 @@ class RoomGeometryWorkflow {
     const [measurement] = this.measurements.splice(index, 1);
     this.emit('measurementsChanged', { measurements: [...this.measurements] });
     return measurement;
+  }
+
+  pruneInvalidMeasurements() {
+    const polygon = this.polygonEditor.toPolygon();
+    const before = this.measurements.length;
+    this.measurements = this.measurements.filter(measurement => {
+      try {
+        resolveAnchor(measurement.anchors[0], polygon);
+        resolveAnchor(measurement.anchors[1], polygon);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    if (this.measurements.length !== before) this.emit('measurementsChanged', { measurements: [...this.measurements] });
+    return this;
   }
 
   solve() {
