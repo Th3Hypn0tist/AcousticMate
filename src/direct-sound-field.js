@@ -28,12 +28,18 @@ class DirectSoundField {
     this.range = [0, Infinity];
     this.frequency = null;
     this.frequencyRange = null;
+    this.preparedSourceCache = new Map();
+  }
+
+  invalidate() {
+    this.preparedSourceCache.clear();
+    return this;
   }
 
   setSpeakers(speakers = [], speakerSets = this.speakerSets) {
     this.speakers = speakers;
     this.speakerSets = speakerSets;
-    return this;
+    return this.invalidate();
   }
 
   speakerTransfer(speaker, frequencyHz) {
@@ -42,7 +48,23 @@ class DirectSoundField {
     return Complex.multiply(local, routed);
   }
 
-  contributionFor(speaker, point, frequencyHz) {
+  prepareSourcesAt(frequencyHz) {
+    frequencyHz = Number(frequencyHz);
+    if (!Number.isFinite(frequencyHz) || frequencyHz < 0) throw new Error('DirectSoundField frequency must be non-negative');
+    const cached = this.preparedSourceCache.get(frequencyHz);
+    if (cached) return cached;
+    const waveNumber = TAU * frequencyHz / this.speedOfSound;
+    const prepared = uniqueEnabledSpeakers(this.speakers, this.speakerSets).map(speaker => ({
+      speaker,
+      transfer: this.speakerTransfer(speaker, frequencyHz),
+      waveNumber,
+    }));
+    this.preparedSourceCache.set(frequencyHz, prepared);
+    return prepared;
+  }
+
+  contributionFor(preparedSource, point, frequencyHz) {
+    const { speaker, transfer, waveNumber } = preparedSource;
     const offset = [
       point[0] - speaker.position[0],
       point[1] - speaker.position[1],
@@ -54,9 +76,8 @@ class DirectSoundField {
       ? Math.max(0, Number(speaker.directivityGain(frequencyHz, offset)) || 0)
       : 1;
     if (directivity <= 0) return [0, 0];
-    const waveNumber = TAU * frequencyHz / this.speedOfSound;
     const propagation = Complex.fromPolar(directivity / (4 * Math.PI * distance), -waveNumber * physicalDistance);
-    return Complex.multiply(this.speakerTransfer(speaker, frequencyHz), propagation);
+    return Complex.multiply(transfer, propagation);
   }
 
   sampleComplexAtFrequency(x, y, z, frequencyHz) {
@@ -65,8 +86,8 @@ class DirectSoundField {
     const point = [Number(x), Number(y), Number(z)];
     if (!point.every(Number.isFinite)) throw new Error('DirectSoundField sample position must be finite');
     let sum = [0, 0];
-    for (const speaker of uniqueEnabledSpeakers(this.speakers, this.speakerSets)) {
-      sum = Complex.add(sum, this.contributionFor(speaker, point, frequencyHz));
+    for (const preparedSource of this.prepareSourcesAt(frequencyHz)) {
+      sum = Complex.add(sum, this.contributionFor(preparedSource, point, frequencyHz));
     }
     return sum;
   }
