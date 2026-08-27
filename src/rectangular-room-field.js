@@ -14,6 +14,20 @@ function modeNormalization(mode, dimensions) {
   return multiplicity / volume;
 }
 
+function normalizeModalBasis(modes) {
+  if (!Array.isArray(modes)) throw new Error('Modal basis must be an array');
+  return modes.map(value => {
+    const indices = value?.indices ?? value;
+    const nx = Number(indices?.nx);
+    const ny = Number(indices?.ny);
+    const nz = Number(indices?.nz);
+    const frequency = Number(value?.frequency);
+    if (![nx, ny, nz].every(Number.isInteger) || [nx, ny, nz].some(index => index < 0) || (nx === 0 && ny === 0 && nz === 0)) throw new Error('Modal basis indices must be non-negative integers with at least one non-zero index');
+    if (!Number.isFinite(frequency) || frequency < 0) throw new Error('Modal basis frequency must be non-negative');
+    return { nx, ny, nz, frequency };
+  }).sort((a, b) => a.frequency - b.frequency);
+}
+
 function modalSourceCoupling(mode, speaker, dimensions, frequencyHz) {
   const k = [mode.nx * Math.PI / dimensions.width, mode.ny * Math.PI / dimensions.height, mode.nz * Math.PI / dimensions.depth];
   const activeAxes = k.map((value, index) => value ? index : -1).filter(index => index >= 0);
@@ -91,7 +105,7 @@ function acousticObjectInverseQ(mode, acousticObjects, dimensions, speedOfSound 
 }
 
 class RectangularRoomField {
-  constructor({ dimensions, openings = [], acousticObjects = [], speakers = [], crossoverNetwork = null, frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
+  constructor({ dimensions, openings = [], acousticObjects = [], speakers = [], crossoverNetwork = null, modes = null, frequency = 58, maxFrequency = 200, q = 18, speedOfSound = SPEED_OF_SOUND } = {}) {
     this.dimensions = { ...dimensions };
     this.openings = [...openings];
     this.acousticObjects = [...acousticObjects];
@@ -101,7 +115,7 @@ class RectangularRoomField {
     this.maxFrequency = Number(maxFrequency);
     this.q = Number(q);
     this.speedOfSound = Number(speedOfSound);
-    this.modes = this.buildModes();
+    this.modes = modes == null ? this.buildModes() : normalizeModalBasis(modes);
     this.preparedModeCache = new Map();
     this.preparedModes = null;
   }
@@ -122,6 +136,7 @@ class RectangularRoomField {
 
   invalidate() { this.preparedModeCache.clear(); this.preparedModes = null; return this; }
   rebuildModes() { this.modes = this.buildModes(); return this.invalidate(); }
+  setModes(modes) { this.modes = normalizeModalBasis(modes); return this.invalidate(); }
   setFrequency(value) { value = Number(value); if (!Number.isFinite(value) || value < 0) throw new Error('Frequency must be a finite non-negative value'); this.frequency = value; this.preparedModes = this.preparedModeCache.get(value) ?? null; return this; }
   setSpeakers(speakers) { this.speakers = speakers; return this.invalidate(); }
   setCrossoverNetwork(value) { if (value != null && typeof value.transferFor !== 'function') throw new Error('Crossover network must implement transferFor(speaker, frequencyHz)'); this.crossoverNetwork = value; return this.invalidate(); }
@@ -191,19 +206,7 @@ class RectangularRoomField {
   }
 
   prepareModes() { return this.prepareModesAt(this.frequency); }
-
-  sampleComplexAtFrequency(x, y, z, frequencyHz) {
-    const point = [x, y, z];
-    let real = 0;
-    let imaginary = 0;
-    for (const prepared of this.prepareModesAt(frequencyHz)) {
-      const atPoint = modeShape(prepared.mode, point, this.dimensions);
-      real += atPoint * prepared.real;
-      imaginary += atPoint * prepared.imaginary;
-    }
-    return [real, imaginary];
-  }
-
+  sampleComplexAtFrequency(x, y, z, frequencyHz) { const point = [x, y, z]; let real = 0; let imaginary = 0; for (const prepared of this.prepareModesAt(frequencyHz)) { const atPoint = modeShape(prepared.mode, point, this.dimensions); real += atPoint * prepared.real; imaginary += atPoint * prepared.imaginary; } return [real, imaginary]; }
   sampleComplex(x, y, z) { return this.sampleComplexAtFrequency(x, y, z, this.frequency); }
   sampleAtFrequency(x, y, z, frequencyHz) { const [real, imaginary] = this.sampleComplexAtFrequency(x, y, z, frequencyHz); return Math.hypot(real, imaginary); }
   sample(x, y, z) { return this.sampleAtFrequency(x, y, z, this.frequency); }
@@ -214,6 +217,7 @@ export {
   modalSourceCoupling,
   modeNormalization,
   modeShape,
+  normalizeModalBasis,
   boundaryModeEffectiveArea,
   openingModeEffectiveArea,
   openingInverseQ,
