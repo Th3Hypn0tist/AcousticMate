@@ -10,16 +10,18 @@
     "compose application UI from WebGUI primitives",
     "load and expose SpeakerModel library data",
     "open and commit RoomEditor workflows",
-    "open and commit SpeakerSet editing workflows"
+    "open and commit SpeakerSet editing workflows",
+    "instantiate AcousticObject treatment semantics using existing S3D Primitive instances"
   ],
   "mustNot": [
     "contain acoustic equations that belong in domain solvers",
     "duplicate S3D generic geometry functionality",
+    "define a second primitive type system in AcousticMate",
     "add AcousticMate concepts to WebGUI",
     "fork or modify reusable S3D domain modules as AcousticMate-owned implementation",
     "mutate module internals outside public contracts",
-    "model acoustic absorbers or diffusors as application objects",
-    "recommend absorber or diffusor placement automatically"
+    "infer absorber or diffuser physics from primitive names",
+    "recommend absorber or diffuser placement automatically unless a later explicit contract enables it"
   ],
   "distribution": {
     "layout": {
@@ -40,6 +42,7 @@
     "extrude room by height",
     "edit room dimensions and boundary openings in the dedicated RoomEditor",
     "treat open doorways as non-reflecting boundary patches without solving exterior space",
+    "optionally create physical acoustic-treatment objects using S3D Primitive geometry plus AcousticBoundaryModel semantics",
     "choose or create SpeakerModel definitions",
     "place one or more Speaker instances",
     "optionally group speakers into SpeakerSet instances",
