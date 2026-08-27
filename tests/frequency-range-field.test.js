@@ -1,26 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { AggregatedFrequencyField, aggregateMagnitudes, frequencySamples } from '../src/aggregated-frequency-field.js';
+import { aggregateValues, frequencySamples } from '../vendor/S3D/domains/acoustics/scalar-field-view.js';
 import { RectangularRoomField } from '../src/rectangular-room-field.js';
 
-test('frequencySamples includes both range endpoints', () => {
-  assert.deepEqual(frequencySamples(20, 80, 4), [20, 40, 60, 80]);
+test('frequencySamples includes both range endpoints and supports one-point ranges', () => {
+  assert.deepEqual(frequencySamples([20, 80], 4), [20, 40, 60, 80]);
+  assert.deepEqual(frequencySamples([40, 40], 12), [40]);
 });
 
-test('aggregation modes have explicit magnitude semantics', () => {
+test('canonical aggregation modes have explicit magnitude semantics', () => {
   const values = [1, 2, 3];
-  assert.equal(aggregateMagnitudes(values, 'peak'), 3);
-  assert.ok(Math.abs(aggregateMagnitudes(values, 'rms') - Math.sqrt(14 / 3)) < 1e-12);
-  assert.equal(aggregateMagnitudes(values, 'energy'), 14);
-  assert.equal(aggregateMagnitudes(values, 'sum'), 6);
-});
-
-test('AggregatedFrequencyField samples source at cached frequency points', () => {
-  const calls = [];
-  const source = { sampleAtFrequency(x, y, z, frequency) { calls.push(frequency); return frequency / 10; } };
-  const field = new AggregatedFrequencyField({ field: source, minHz: 20, maxHz: 40, samples: 3, aggregation: 'peak' });
-  assert.equal(field.sample(0, 0, 0), 4);
-  assert.deepEqual(calls, [20, 30, 40]);
+  assert.equal(aggregateValues(values, 'peak'), 3);
+  assert.ok(Math.abs(aggregateValues(values, 'rms') - Math.sqrt(14 / 3)) < 1e-12);
+  assert.equal(aggregateValues(values, 'energy'), 14);
+  assert.equal(aggregateValues(values, 'sum'), 6);
 });
 
 test('RectangularRoomField caches prepared modes independently by frequency', () => {
