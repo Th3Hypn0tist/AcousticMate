@@ -8,9 +8,12 @@
     "fieldView": "S3D/domains/acoustics/SampledFieldPlane | OrthogonalFieldSlices"
   },
   "flow": [
-    "pointer movement changes the selected Speaker or SpeakerSet transform",
-    "horizontal drag changes XZ while vertical drag changes Y",
-    "orientation controls may change speaker or set orientation",
+    "global Gizmos enable gates pointer-driven speaker and SpeakerSet transforms",
+    "when Gizmos are disabled pointer interaction does not move speakers or sets",
+    "the first click selects a manipulation target in Position mode",
+    "clicking the selected target without dragging toggles Position and Rotate modes",
+    "Position drag changes XZ while Shift-drag changes Y",
+    "Rotate drag changes pitch/yaw while Shift-drag changes roll",
     "transform changes update the bound AcousticMate model",
     "SpeakerSet member world transforms are resolved from parent and member-local transforms",
     "affected speaker-mode coupling is invalidated",
@@ -19,9 +22,10 @@
   ],
   "invariants": [
     "speaker and set counts are unrestricted by architecture",
-    "each standalone speaker can be moved independently",
+    "each standalone speaker can be moved independently when Gizmos are enabled",
+    "direct object dragging is not an alternate movement path when Gizmos are disabled",
     "a SpeakerSet can be manipulated as one parent object in the main visualizer",
-    "moving a SpeakerSet preserves its member-local positions and orientations",
+    "moving or rotating a SpeakerSet preserves its member-local transforms",
     "individual member geometry is edited in SpeakerSetEditor",
     "speaker height participates in modal coupling",
     "speaker/set orientation participates in directional coupling when directivity data exists",
