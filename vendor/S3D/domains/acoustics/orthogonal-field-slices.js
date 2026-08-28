@@ -44,6 +44,7 @@ class OrthogonalFieldSlices extends ScalarFieldView {
     this.range = this.valueRange ? [...this.valueRange] : [0, 0];
     this.samples = [];
     this.sliceSampleCache = new Map();
+    this.rangeStableMutation = false;
     this.dirty = true;
     for (const axis of Object.keys(definitions)) {
       this.slices[axis] = this.validateSlice(axis, this.slices[axis]);
@@ -74,8 +75,14 @@ class OrthogonalFieldSlices extends ScalarFieldView {
   setSlice(axis, value) { this.slices[axis] = this.validateSlice(axis, value); return this.invalidate(); }
   setSliceCount(axis, value) {
     this.counts[axis] = this.validateCount(axis, value);
+    this.rangeStableMutation = true;
     this.dirty = true;
     return this;
+  }
+  consumeRangeStableMutation() {
+    const value = this.rangeStableMutation;
+    this.rangeStableMutation = false;
+    return value;
   }
   setOpacity(value) {
     this.opacity = this.validateOpacity(value);
@@ -90,6 +97,7 @@ class OrthogonalFieldSlices extends ScalarFieldView {
   setResolution(name, value) { this.resolution[name] = [...value]; return this.invalidate(); }
   setSamplingPolicy(value) { this.samplingPolicy = value ?? new SpatialSamplingPolicy(); return this.invalidate(); }
   invalidate() {
+    this.rangeStableMutation = false;
     this.sliceSampleCache.clear();
     this.dirty = true;
     return this;
