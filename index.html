@@ -28,6 +28,8 @@
     installSliceControls();
     const { installGizmoRuntime } = await import('./src/gizmo-runtime.js?v=0.9.9');
     installGizmoRuntime();
+    const { installSetEditorPreviewRuntime } = await import('./src/set-editor-preview-runtime.js?v=0.9.9');
+    installSetEditorPreviewRuntime();
   </script>
 </body>
 </html>
