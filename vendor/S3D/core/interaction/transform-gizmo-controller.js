@@ -141,7 +141,9 @@ class TransformGizmoController {
   setEnabled(value) {
     this.enabled = Boolean(value);
     if (!this.enabled) {
+      const pointerId = this.pointer?.id;
       this.pointer = null;
+      if (pointerId != null && this.canvas.hasPointerCapture?.(pointerId)) this.canvas.releasePointerCapture(pointerId);
       this.select(null);
     }
     return this;
