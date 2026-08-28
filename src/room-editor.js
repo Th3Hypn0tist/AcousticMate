@@ -235,7 +235,7 @@ class RoomEditor {
   setMarkerVisibility(value) {
     const visible = Boolean(value);
     for (const marker of this.markers.values()) marker.visible = visible;
-    for (const object of this.room.acousticObjects ?? []) object.geometry.visible = visible;
+    for (const object of this.room.acousticObjects ?? []) object.geometry.visible = true;
     this.geometryWorkflow.polygonEditor.visible = visible;
     this.geometryWorkflow.volume.visible = visible && this.geometryWorkflow.polygonEditor.closed;
   }
@@ -267,7 +267,7 @@ class RoomEditor {
     const rect = this.room.acousticObjectRect(object); if (!rect) return;
     const thickness = Math.max(.02, Number(object.metadata?.thickness ?? .1));
     object.geometry.setPosition(rect.center.map((value, axis) => value + rect.normal[axis] * thickness / 2), { emit: false });
-    object.geometry.color = [...(TREATMENT_COLORS[object.type] ?? [.65, .65, .65, .75])]; object.geometry.visible = this.visible;
+    object.geometry.color = [...(TREATMENT_COLORS[object.type] ?? [.65, .65, .65, .75])]; object.geometry.visible = true;
     if (object.geometry.primitive === 'cylinder') { const radius = object.attachment.width / 2; object.geometry.scale = [radius, object.attachment.height / 2, radius]; }
     else if (object.attachment.wall.startsWith('x-')) object.geometry.scale = [thickness / 2, object.attachment.height / 2, object.attachment.width / 2];
     else object.geometry.scale = [object.attachment.width / 2, object.attachment.height / 2, thickness / 2];
@@ -352,7 +352,7 @@ class RoomEditor {
   treatmentProfile(type, coefficient = null) { if (type === 'diffuser') { const value = coefficient ?? .65; return new AcousticMaterialProfile({ scattering: [[20, value], [20000, value]] }); } const value = coefficient ?? (type === 'bass-trap' ? .55 : .75); return new AcousticMaterialProfile({ absorption: [[20, value], [20000, value]] }); }
   addAcousticObject(type = 'absorber') {
     const wall = 'z-min'; const width = type === 'bass-trap' ? .5 : Math.min(1.2, this.room.wallSpan(wall) * .5); const height = Math.min(type === 'bass-trap' ? 2 : .6, this.room.dimensions.height); const sillHeight = Math.max(0, Math.min(.8, this.room.dimensions.height - height)); const offset = Math.max(0, (this.room.wallSpan(wall) - width) / 2); const id = `${type}-${++this.objectSequence}`;
-    const geometry = type === 'bass-trap' ? new Cylinder({ id: `${id}-geometry`, color: TREATMENT_COLORS[type], segments: 20, selectable: false, visible: this.visible }) : new Box({ id: `${id}-geometry`, color: TREATMENT_COLORS[type], selectable: false, visible: this.visible });
+    const geometry = type === 'bass-trap' ? new Cylinder({ id: `${id}-geometry`, color: TREATMENT_COLORS[type], segments: 20, selectable: false, visible: true }) : new Box({ id: `${id}-geometry`, color: TREATMENT_COLORS[type], selectable: false, visible: true });
     const object = new AcousticObject({ id, type, geometry, acousticModel: type === 'diffuser' ? 'scattering' : 'absorptive', materialProfile: this.treatmentProfile(type), attachment: { wall, offset, width, height, sillHeight }, metadata: { thickness: type === 'bass-trap' ? width : .1 } });
     this.scene.add(geometry); try { return this.room.addAcousticObject(object); } catch (error) { this.scene.remove(geometry); throw error; }
   }
