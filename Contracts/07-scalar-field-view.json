@@ -32,6 +32,12 @@
     ],
     "invariant": "adding the 3D field view does not remove or redefine the existing 2D heatmap"
   },
+  "displayRange": {
+    "shared": "all active views of the same analysis configuration use one color range",
+    "comparisonInvariant": "within the same analysis configuration, automatic range updates may expand to contain newly larger values but must not shrink merely because the field was attenuated",
+    "analysisChange": "frequency, frequency range, aggregation, field identity or explicit field analysis signature change may establish a new automatic range",
+    "explicitReset": "a caller may explicitly reset the display range and request re-normalization for the current analysis configuration"
+  },
   "controls": {
     "frequency": "number | null",
     "frequencyRange": "[minHz,maxHz] | null",
