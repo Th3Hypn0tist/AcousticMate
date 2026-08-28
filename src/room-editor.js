@@ -9,6 +9,17 @@ const WALL_OPTIONS = [
   ['x-max', 'Right wall'],
 ];
 
+const TREATMENT_TYPE_OPTIONS = [
+  ['absorber', 'Absorber'],
+  ['diffuser', 'Diffuser'],
+  ['bass-trap', 'Bass trap'],
+];
+
+const PRIMITIVE_OPTIONS = [
+  ['box', 'Box'],
+  ['cylinder', 'Cylinder'],
+];
+
 const TREATMENT_COLORS = {
   absorber: [.24, .72, .95, .72],
   diffuser: [.82, .58, .28, .78],
@@ -32,6 +43,8 @@ class RoomEditor {
     Object.assign(this, { gui, panel, room, scene, camera, canvas, roomOutline, field2DView, field3DView, roomField, dimensions, onOpen, onClose, onChanged });
     this.openingSequence = room.openings.length;
     this.objectSequence = room.acousticObjects?.length ?? 0;
+    this.newAcousticObjectType = 'absorber';
+    this.newAcousticObjectPrimitive = 'box';
     this.markers = new Map();
     this.cameraSnapshot = null;
     this.transactionSnapshot = null;
@@ -116,7 +129,6 @@ class RoomEditor {
     this.geometryWorkflow.polygonEditor.restore(snapshot.polygon);
     this.geometryWorkflow.syncVolume();
     this.geometryWorkflow.measurements = snapshot.measurements.map(value => this.geometryWorkflow.addMeasurement(value)).slice(-snapshot.measurements.length);
-    // addMeasurement pushes into the existing array, so replace with canonical reconstructed values once.
     this.geometryWorkflow.measurements.splice(0, this.geometryWorkflow.measurements.length - snapshot.measurements.length);
     this.geometryWorkflow.referenceName = snapshot.reference.name;
     this.geometryWorkflow.referenceLayer.setImage(snapshot.reference.image).setOpacity(snapshot.reference.opacity).setTransform(snapshot.reference.transform);
@@ -350,16 +362,41 @@ class RoomEditor {
   }
 
   treatmentProfile(type, coefficient = null) { if (type === 'diffuser') { const value = coefficient ?? .65; return new AcousticMaterialProfile({ scattering: [[20, value], [20000, value]] }); } const value = coefficient ?? (type === 'bass-trap' ? .55 : .75); return new AcousticMaterialProfile({ absorption: [[20, value], [20000, value]] }); }
-  addAcousticObject(type = 'absorber') {
-    const wall = 'z-min'; const width = type === 'bass-trap' ? .5 : Math.min(1.2, this.room.wallSpan(wall) * .5); const height = Math.min(type === 'bass-trap' ? 2 : .6, this.room.dimensions.height); const sillHeight = Math.max(0, Math.min(.8, this.room.dimensions.height - height)); const offset = Math.max(0, (this.room.wallSpan(wall) - width) / 2); const id = `${type}-${++this.objectSequence}`;
-    const geometry = type === 'bass-trap' ? new Cylinder({ id: `${id}-geometry`, color: TREATMENT_COLORS[type], segments: 20, selectable: false, visible: true }) : new Box({ id: `${id}-geometry`, color: TREATMENT_COLORS[type], selectable: false, visible: true });
+  createAcousticGeometry(type, primitive, id) {
+    const options = { id: `${id}-geometry`, color: TREATMENT_COLORS[type], selectable: false, visible: true };
+    if (primitive === 'box') return new Box(options);
+    if (primitive === 'cylinder') return new Cylinder({ ...options, segments: 20 });
+    throw new Error(`Unsupported acoustic object primitive: ${primitive}`);
+  }
+  addAcousticObject(type = 'absorber', primitive = 'box') {
+    const wall = 'z-min';
+    const width = type === 'bass-trap' ? .5 : Math.min(1.2, this.room.wallSpan(wall) * .5);
+    const height = Math.min(type === 'bass-trap' ? 2 : .6, this.room.dimensions.height);
+    const sillHeight = Math.max(0, Math.min(.8, this.room.dimensions.height - height));
+    const offset = Math.max(0, (this.room.wallSpan(wall) - width) / 2);
+    const id = `${type}-${++this.objectSequence}`;
+    const geometry = this.createAcousticGeometry(type, primitive, id);
     const object = new AcousticObject({ id, type, geometry, acousticModel: type === 'diffuser' ? 'scattering' : 'absorptive', materialProfile: this.treatmentProfile(type), attachment: { wall, offset, width, height, sillHeight }, metadata: { thickness: type === 'bass-trap' ? width : .1 } });
-    this.scene.add(geometry); try { return this.room.addAcousticObject(object); } catch (error) { this.scene.remove(geometry); throw error; }
+    this.scene.add(geometry);
+    try { return this.room.addAcousticObject(object); }
+    catch (error) { this.scene.remove(geometry); throw error; }
   }
   acousticObjectCard(object) {
     const attachment = object.attachment; const wall = this.gui.select({ value: attachment.wall, on: { change: event => { const nextWall = event.target.value; const maxOffset = Math.max(0, this.room.wallSpan(nextWall) - attachment.width); this.room.updateAcousticObject(object, { attachment: { ...object.attachment, wall: nextWall, offset: clamp(attachment.offset, 0, maxOffset) } }); } } }, WALL_OPTIONS.map(([value, text]) => this.gui.option(value, text)));
     const coefficient = object.type === 'diffuser' ? object.scatteringAt(1000) : object.absorptionAt(125); const updateAttachment = key => value => this.room.updateAcousticObject(object, { attachment: { ...object.attachment, [key]: value } });
     return this.gui.h('section', { className: 'speaker-card treatment-card' }, [this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('strong', { text: object.id }), this.gui.button('Remove', { className: 'danger-button', on: { click: () => this.room.removeAcousticObject(object) } })]), this.gui.h('span', { className: 'model-name', text: `${object.type} · ${object.geometry.primitive} · ${object.acousticModel}` }), this.gui.field('Wall', wall, { className: 'compact-field' }), this.gui.h('div', { className: 'position-grid' }, [this.numberField('Offset (m)', attachment.offset, { min: 0, max: 100, update: updateAttachment('offset') }), this.numberField('Width (m)', attachment.width, { min: .05, max: 20, update: updateAttachment('width') }), this.numberField('Height (m)', attachment.height, { min: .05, max: 20, update: updateAttachment('height') })]), this.numberField('Bottom (m)', attachment.sillHeight, { min: 0, max: 20, update: updateAttachment('sillHeight') }), this.numberField('Thickness (m)', Number(object.metadata.thickness ?? .1), { min: .02, max: 5, update: value => { object.metadata.thickness = value; this.applyAcousticObjects(); } }), this.numberField(object.type === 'diffuser' ? 'Scattering' : 'Absorption', coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }), object.type === 'diffuser' ? this.gui.h('p', { className: 'hint', text: 'Current modal solver represents this scattering boundary but does not claim exact diffuser scattering.' }) : this.gui.h('p', { className: 'hint', text: 'Absorption contributes mode-dependent boundary loss at the attached wall area.' })]);
+  }
+
+  acousticObjectCreateControls() {
+    const type = this.gui.select({ value: this.newAcousticObjectType, on: { change: event => { this.newAcousticObjectType = event.target.value; } } }, TREATMENT_TYPE_OPTIONS.map(([value, text]) => this.gui.option(value, text)));
+    const primitive = this.gui.select({ value: this.newAcousticObjectPrimitive, on: { change: event => { this.newAcousticObjectPrimitive = event.target.value; } } }, PRIMITIVE_OPTIONS.map(([value, text]) => this.gui.option(value, text)));
+    return this.gui.h('fieldset', { className: 'set-helper' }, [
+      this.gui.h('legend', { text: 'Add acoustic object' }),
+      this.gui.field('Acoustic type', type, { className: 'compact-field' }),
+      this.gui.field('Primitive', primitive, { className: 'compact-field' }),
+      this.gui.button('Add object', { on: { click: () => this.addAcousticObject(this.newAcousticObjectType, this.newAcousticObjectPrimitive) } }),
+      this.gui.h('p', { className: 'hint', text: 'Acoustic behavior and S3D primitive geometry are independent. A bass trap may be a Box or Cylinder.' }),
+    ]);
   }
 
   render() {
@@ -369,7 +406,7 @@ class RoomEditor {
       this.gui.row([this.gui.button('✓ Commit and return', { on: { click: () => this.commit() } }), this.gui.button('Cancel changes', { className: 'danger-button', on: { click: () => this.cancel() } })], { className: 'button-row' }),
       this.dimensionControls(), this.geometryWorkflowControls(),
       this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('h2', { text: 'Openings' }), this.gui.button('Add opening', { on: { click: () => this.addOpening() } })]), this.gui.h('div', { className: 'member-list' }, this.room.openings.map(opening => this.openingCard(opening))),
-      this.gui.h('h2', { text: 'Acoustic objects' }), this.gui.row([this.gui.button('Add absorber', { on: { click: () => this.addAcousticObject('absorber') } }), this.gui.button('Add diffuser', { on: { click: () => this.addAcousticObject('diffuser') } }), this.gui.button('Add bass trap', { on: { click: () => this.addAcousticObject('bass-trap') } })], { className: 'button-row' }), this.gui.h('div', { className: 'member-list' }, (this.room.acousticObjects ?? []).map(object => this.acousticObjectCard(object))),
+      this.gui.h('h2', { text: 'Acoustic objects' }), this.acousticObjectCreateControls(), this.gui.h('div', { className: 'member-list' }, (this.room.acousticObjects ?? []).map(object => this.acousticObjectCard(object))),
       this.gui.h('p', { className: 'hint', text: 'Openings and absorptive objects affect modal damping. Diffusers remain explicit scattering objects; exact scattering is outside the current solver.' }),
     ]);
   }
