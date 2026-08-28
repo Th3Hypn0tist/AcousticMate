@@ -8,9 +8,10 @@ canvas.height = 480;
 Object.defineProperty(canvas, 'clientWidth', { configurable: true, value: 640 });
 Object.defineProperty(canvas, 'clientHeight', { configurable: true, value: 480 });
 canvas.getBoundingClientRect = () => ({ left: 0, top: 0, right: 640, bottom: 480, width: 640, height: 480, x: 0, y: 0, toJSON() {} });
-canvas.setPointerCapture = () => {};
-canvas.releasePointerCapture = () => {};
-canvas.hasPointerCapture = () => false;
+let capturedPointer = null;
+canvas.setPointerCapture = pointerId => { capturedPointer = pointerId; };
+canvas.releasePointerCapture = pointerId => { if (capturedPointer === pointerId) capturedPointer = null; };
+canvas.hasPointerCapture = pointerId => capturedPointer === pointerId;
 
 const results = [];
 function check(name, condition) {
@@ -68,6 +69,15 @@ try {
 
   clickCenter(3);
   check('third click toggles back to Position', controller.mode === 'position');
+
+  const dragStart = { bubbles: true, button: 0, clientX: 320, clientY: 240, pointerId: 9 };
+  canvas.dispatchEvent(new PointerEvent('pointerdown', dragStart));
+  check('active gizmo pointer captures canvas', capturedPointer === 9 && controller.pointer?.id === 9);
+  toggle.checked = false;
+  toggle.dispatchEvent(new Event('change', { bubbles: true }));
+  check('disabling gizmos cancels active transform', controller.pointer === null && controller.selected === null);
+  check('disabling gizmos releases pointer capture', capturedPointer === null);
+  check('gizmos report off after active cancel', canvas.dataset.gizmos === 'off' && controller.enabled === false);
 
   controller.destroy();
   viewport.destroy();
