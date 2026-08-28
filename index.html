@@ -23,8 +23,9 @@
 <body>
   <main id="app"></main>
   <script type="module">
-    await import('./src/main.js?v=0.9.7');
-    for (const input of document.querySelectorAll('.slice-controls input[type="range"][max="32"]')) input.max = '10';
+    await import('./src/main.js?v=0.9.8');
+    const { installSliceControls } = await import('./src/slice-controls-ui.js?v=0.9.8');
+    installSliceControls();
   </script>
 </body>
 </html>
