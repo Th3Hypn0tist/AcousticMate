@@ -21,6 +21,7 @@ async function assertModuleGraph(entryUrl, visited = new Set()) {
 test('browser entry uses a complete local module graph', async () => {
   await assertModuleGraph(new URL('../src/main.js', import.meta.url));
   await assertModuleGraph(new URL('../src/slice-controls-ui.js', import.meta.url));
+  await assertModuleGraph(new URL('../src/field-component-ui.js', import.meta.url));
   await assertModuleGraph(new URL('../src/gizmo-runtime.js', import.meta.url));
 });
 
