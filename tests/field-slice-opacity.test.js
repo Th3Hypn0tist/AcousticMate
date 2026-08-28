@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OrthogonalFieldSlices } from '../vendor/S3D/domains/acoustics/orthogonal-field-slices.js';
+import { SampledFieldPlane } from '../vendor/S3D/domains/acoustics/sampled-field-plane.js';
 import { RenderStore } from '../vendor/S3D/core/render_store.js';
 
 const field = { sample: (x, y, z) => x + y + z };
@@ -33,4 +34,15 @@ test('vendored RenderStore preserves alpha and separates transparent boxes', () 
   assert.equal(snapshot.counts.solidBoxes, 1);
   assert.equal(snapshot.transparentBoxes.length, 10);
   assert.equal(snapshot.transparentBoxes[9], .25);
+});
+
+test('2D sampled heatmap is protected from transparent slice overlays by default', () => {
+  const heatmap = new SampledFieldPlane({ id: 'heatmap', field, bounds, resolution: [2, 2] });
+  heatmap.rebuild();
+  assert.equal(heatmap.protectFromTransparency, true);
+
+  const calls = [];
+  heatmap.draw({ box: (...args) => calls.push(args) });
+  assert.equal(calls.length, 4);
+  assert.ok(calls.every(call => call[4] === heatmap));
 });
