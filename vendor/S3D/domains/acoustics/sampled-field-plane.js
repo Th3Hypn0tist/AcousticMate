@@ -9,7 +9,7 @@ function defaultColor(value) {
 }
 
 class SampledFieldPlane extends ScalarFieldView {
-  constructor({ id, field, bounds, resolution = [36, 28], height = .025, color = defaultColor, range = null, frequency = null, frequencyRange = null, aggregation = 'single', samplingPolicy = null, metadata = {} } = {}) {
+  constructor({ id, field, bounds, resolution = [36, 28], height = .025, color = defaultColor, range = null, frequency = null, frequencyRange = null, aggregation = 'single', samplingPolicy = null, protectFromTransparency = true, metadata = {} } = {}) {
     super({ id, field, range, frequency, frequencyRange, aggregation, selectable: false, metadata });
     if (!bounds?.min || !bounds?.max) throw new Error('SampledFieldPlane requires min/max bounds');
     this.bounds = { min: [...bounds.min], max: [...bounds.max] };
@@ -18,6 +18,7 @@ class SampledFieldPlane extends ScalarFieldView {
     this.samplingState = null;
     this.height = Number(height);
     this.color = color;
+    this.protectFromTransparency = Boolean(protectFromTransparency);
     this.sampleRange = [0, 0];
     this.range = this.valueRange ? [...this.valueRange] : [0, 0];
     this.samples = [];
@@ -27,6 +28,7 @@ class SampledFieldPlane extends ScalarFieldView {
   setBounds(bounds) { this.bounds = { min: [...bounds.min], max: [...bounds.max] }; return this.invalidate(); }
   setResolution(value) { this.resolution = [...value]; return this.invalidate(); }
   setSamplingPolicy(value) { this.samplingPolicy = value ?? new SpatialSamplingPolicy(); return this.invalidate(); }
+  setProtectFromTransparency(value) { this.protectFromTransparency = Boolean(value); return this; }
   invalidate() { this.dirty = true; return this; }
   sample(x, y, z) { return this.sampleField([x, y, z]); }
 
