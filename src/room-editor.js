@@ -100,7 +100,7 @@ class RoomEditor {
     return {
       dimensions: { ...this.room.dimensions },
       openings: this.room.openings.map(opening => ({ id: opening.id, wall: opening.wall, offset: opening.offset, width: opening.width, height: opening.height, sillHeight: opening.sillHeight, type: opening.type, transmission: opening.transmission })),
-      acousticObjects: (this.room.acousticObjects ?? []).map(object => ({ object, attachment: object.attachment ? { ...object.attachment } : null, acousticModel: object.acousticModel, materialProfile: object.materialProfile, metadata: { ...object.metadata } })),
+      acousticObjects: (this.room.acousticObjects ?? []).map(object => ({ object, attachment: object.attachment ? { ...object.attachment } : null, acousticModel: object.acousticModel, materialProfile: object.materialProfile, metadata: { ...object.metadata }, position: [...object.geometry.position], scale: [...object.geometry.scale] })),
       polygon: this.geometryWorkflow.polygonEditor.snapshot(),
       measurements: this.geometryWorkflow.measurements.map(cloneMeasurement),
       reference: {
@@ -123,6 +123,8 @@ class RoomEditor {
       item.object.setAcousticModel(item.acousticModel);
       item.object.setMaterialProfile(item.materialProfile);
       item.object.metadata = { ...item.metadata };
+      item.object.geometry.setPosition(item.position, { emit: false });
+      item.object.geometry.scale = [...item.scale];
       if (!item.object.geometry.scene) this.scene.add(item.object.geometry);
       this.room.addAcousticObject(item.object);
     }
@@ -275,11 +277,13 @@ class RoomEditor {
     this.roomField.setOpenings(this.room.openings); this.onChanged?.(this.room); if (this.visible) this.render();
   }
   positionAcousticObject(object) {
+    object.geometry.color = [...(TREATMENT_COLORS[object.type] ?? [.65, .65, .65, .75])];
+    object.geometry.visible = true;
+    object.syncPresentationGeometry?.();
     if (!object.attachment) return;
     const rect = this.room.acousticObjectRect(object); if (!rect) return;
     const thickness = Math.max(.02, Number(object.metadata?.thickness ?? .1));
     object.geometry.setPosition(rect.center.map((value, axis) => value + rect.normal[axis] * thickness / 2), { emit: false });
-    object.geometry.color = [...(TREATMENT_COLORS[object.type] ?? [.65, .65, .65, .75])]; object.geometry.visible = true;
     if (object.geometry.primitive === 'cylinder') { const radius = object.attachment.width / 2; object.geometry.scale = [radius, object.attachment.height / 2, radius]; }
     else if (object.attachment.wall.startsWith('x-')) object.geometry.scale = [thickness / 2, object.attachment.height / 2, object.attachment.width / 2];
     else object.geometry.scale = [object.attachment.width / 2, object.attachment.height / 2, thickness / 2];
@@ -382,9 +386,45 @@ class RoomEditor {
     catch (error) { this.scene.remove(geometry); throw error; }
   }
   acousticObjectCard(object) {
-    const attachment = object.attachment; const wall = this.gui.select({ value: attachment.wall, on: { change: event => { const nextWall = event.target.value; const maxOffset = Math.max(0, this.room.wallSpan(nextWall) - attachment.width); this.room.updateAcousticObject(object, { attachment: { ...object.attachment, wall: nextWall, offset: clamp(attachment.offset, 0, maxOffset) } }); } } }, WALL_OPTIONS.map(([value, text]) => this.gui.option(value, text)));
-    const coefficient = object.type === 'diffuser' ? object.scatteringAt(1000) : object.absorptionAt(125); const updateAttachment = key => value => this.room.updateAcousticObject(object, { attachment: { ...object.attachment, [key]: value } });
-    return this.gui.h('section', { className: 'speaker-card treatment-card' }, [this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('strong', { text: object.id }), this.gui.button('Remove', { className: 'danger-button', on: { click: () => this.room.removeAcousticObject(object) } })]), this.gui.h('span', { className: 'model-name', text: `${object.type} · ${object.geometry.primitive} · ${object.acousticModel}` }), this.gui.field('Wall', wall, { className: 'compact-field' }), this.gui.h('div', { className: 'position-grid' }, [this.numberField('Offset (m)', attachment.offset, { min: 0, max: 100, update: updateAttachment('offset') }), this.numberField('Width (m)', attachment.width, { min: .05, max: 20, update: updateAttachment('width') }), this.numberField('Height (m)', attachment.height, { min: .05, max: 20, update: updateAttachment('height') })]), this.numberField('Bottom (m)', attachment.sillHeight, { min: 0, max: 20, update: updateAttachment('sillHeight') }), this.numberField('Thickness (m)', Number(object.metadata.thickness ?? .1), { min: .02, max: 5, update: value => { object.metadata.thickness = value; this.applyAcousticObjects(); } }), this.numberField(object.type === 'diffuser' ? 'Scattering' : 'Absorption', coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }), object.type === 'diffuser' ? this.gui.h('p', { className: 'hint', text: 'Current modal solver represents this scattering boundary but does not claim exact diffuser scattering.' }) : this.gui.h('p', { className: 'hint', text: 'Absorption contributes mode-dependent boundary loss at the attached wall area.' })]);
+    const coefficient = object.type === 'diffuser' ? object.scatteringAt(1000) : object.absorptionAt(125);
+    const common = [
+      this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('strong', { text: object.id }), this.gui.button('Remove', { className: 'danger-button', on: { click: () => this.room.removeAcousticObject(object) } })]),
+      this.gui.h('span', { className: 'model-name', text: `${object.type} · ${object.geometry.primitive} · ${object.acousticModel}` }),
+    ];
+    if (!object.attachment) {
+      const updatePosition = axis => value => {
+        const position = [...object.geometry.position];
+        position[axis] = value;
+        object.geometry.setPosition(position);
+        this.onChanged?.(this.room);
+      };
+      const updateScale = axis => value => {
+        const scale = [...object.geometry.scale];
+        scale[axis] = value;
+        object.geometry.scale = scale;
+        this.onChanged?.(this.room);
+      };
+      return this.gui.h('section', { className: 'speaker-card treatment-card' }, [
+        ...common,
+        this.gui.h('span', { className: 'coordinates', text: 'Free-standing · no room-surface boundary patch' }),
+        this.gui.h('div', { className: 'position-grid' }, [0, 1, 2].map(axis => this.numberField(['X (m)', 'Y (m)', 'Z (m)'][axis], object.geometry.position[axis], { update: updatePosition(axis) }))),
+        this.gui.h('div', { className: 'position-grid' }, [0, 1, 2].map(axis => this.numberField(['Scale X', 'Scale Y', 'Scale Z'][axis], object.geometry.scale[axis], { min: .001, max: 100, update: updateScale(axis) }))),
+        this.numberField(object.type === 'diffuser' ? 'Scattering' : 'Absorption', coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }),
+        this.gui.h('p', { className: 'hint', text: 'Free-standing geometry remains movable/rotatable, but the current rectangular modal solver does not convert it into wall-boundary loss without an attachment.' }),
+      ]);
+    }
+    const attachment = object.attachment;
+    const wall = this.gui.select({ value: attachment.wall, on: { change: event => { const nextWall = event.target.value; const maxOffset = Math.max(0, this.room.wallSpan(nextWall) - attachment.width); this.room.updateAcousticObject(object, { attachment: { ...object.attachment, wall: nextWall, offset: clamp(attachment.offset, 0, maxOffset) } }); } } }, WALL_OPTIONS.map(([value, text]) => this.gui.option(value, text)));
+    const updateAttachment = key => value => this.room.updateAcousticObject(object, { attachment: { ...object.attachment, [key]: value } });
+    return this.gui.h('section', { className: 'speaker-card treatment-card' }, [
+      ...common,
+      this.gui.field('Wall', wall, { className: 'compact-field' }),
+      this.gui.h('div', { className: 'position-grid' }, [this.numberField('Offset (m)', attachment.offset, { min: 0, max: 100, update: updateAttachment('offset') }), this.numberField('Width (m)', attachment.width, { min: .05, max: 20, update: updateAttachment('width') }), this.numberField('Height (m)', attachment.height, { min: .05, max: 20, update: updateAttachment('height') })]),
+      this.numberField('Bottom (m)', attachment.sillHeight, { min: 0, max: 20, update: updateAttachment('sillHeight') }),
+      this.numberField('Thickness (m)', Number(object.metadata.thickness ?? .1), { min: .02, max: 5, update: value => { object.metadata.thickness = value; this.applyAcousticObjects(); } }),
+      this.numberField(object.type === 'diffuser' ? 'Scattering' : 'Absorption', coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }),
+      object.type === 'diffuser' ? this.gui.h('p', { className: 'hint', text: 'Current modal solver represents this scattering boundary but does not claim exact diffuser scattering.' }) : this.gui.h('p', { className: 'hint', text: 'Absorption contributes mode-dependent boundary loss at the attached wall area.' }),
+    ]);
   }
 
   acousticObjectCreateControls() {
@@ -407,7 +447,7 @@ class RoomEditor {
       this.dimensionControls(), this.geometryWorkflowControls(),
       this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('h2', { text: 'Openings' }), this.gui.button('Add opening', { on: { click: () => this.addOpening() } })]), this.gui.h('div', { className: 'member-list' }, this.room.openings.map(opening => this.openingCard(opening))),
       this.gui.h('h2', { text: 'Acoustic objects' }), this.acousticObjectCreateControls(), this.gui.h('div', { className: 'member-list' }, (this.room.acousticObjects ?? []).map(object => this.acousticObjectCard(object))),
-      this.gui.h('p', { className: 'hint', text: 'Openings and absorptive objects affect modal damping. Diffusers remain explicit scattering objects; exact scattering is outside the current solver.' }),
+      this.gui.h('p', { className: 'hint', text: 'Openings and attached absorptive objects affect modal damping. Free-standing objects remain geometry-only for the current rectangular boundary-loss model. Diffusers remain explicit scattering objects; exact scattering is outside the current solver.' }),
     ]);
   }
 
