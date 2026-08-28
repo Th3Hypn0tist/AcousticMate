@@ -26,7 +26,7 @@ function viewSamplingFrequency({ frequency = null, frequencyRange = null } = {})
 }
 
 class SpatialSamplingPolicy {
-  constructor({ speedOfSound = 343, samplesPerWavelength = 2.5, maxResolutionScale = 3 } = {}) {
+  constructor({ speedOfSound = 343, samplesPerWavelength = 2.5, maxResolutionScale = 2 } = {}) {
     this.speedOfSound = positiveNumber(speedOfSound, 'SpatialSamplingPolicy speedOfSound');
     this.samplesPerWavelength = positiveNumber(samplesPerWavelength, 'SpatialSamplingPolicy samplesPerWavelength');
     if (this.samplesPerWavelength < 2) throw new Error('SpatialSamplingPolicy samplesPerWavelength must be >= 2');
