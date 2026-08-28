@@ -42,7 +42,8 @@ class FieldViewRangeCoordinator {
   }
 
   invalidate() {
-    this.rangeDirty = true;
+    const topologyOnly = this.views.some(view => view?.consumeRangeStableMutation?.() === true);
+    if (!topologyOnly) this.rangeDirty = true;
     return this;
   }
 }
