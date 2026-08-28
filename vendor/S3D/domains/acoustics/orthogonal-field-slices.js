@@ -9,22 +9,12 @@ const definitions = Object.freeze({
 });
 const MAX_SLICES_PER_AXIS = 10;
 
-function vanDerCorputBase2(index) {
-  let n = Math.max(1, Math.floor(Number(index) || 1));
-  let denominator = 1;
-  let value = 0;
-  while (n > 0) {
-    denominator *= 2;
-    value += (n % 2) / denominator;
-    n = Math.floor(n / 2);
-  }
-  return value;
+function evenSliceFractions(count) {
+  count = Math.max(0, Math.floor(Number(count) || 0));
+  return Array.from({ length: count }, (_, index) => (index + 1) / (count + 1));
 }
 
-function stableSliceFractions(count) {
-  count = Math.max(0, Math.floor(Number(count) || 0));
-  return Array.from({ length: count }, (_, index) => vanDerCorputBase2(index + 1));
-}
+function stableSliceFractions(count) { return evenSliceFractions(count); }
 
 class OrthogonalFieldSlices extends ScalarFieldView {
   constructor({ id, field, bounds, slices = null, counts = {}, resolution = {}, thickness = .018, opacity = .28, opacities = {}, color = defaultColor, range = null, frequency = null, frequencyRange = null, aggregation = 'single', samplingPolicy = null, metadata = {} } = {}) {
@@ -108,18 +98,10 @@ class OrthogonalFieldSlices extends ScalarFieldView {
     const definition = definitions[axis];
     const count = this.counts[axis];
     if (count === 0) return [];
-    const anchor = this.slices[axis];
-    if (count === 1) return [anchor];
+    if (count === 1) return [this.slices[axis]];
     const low = this.bounds.min[definition.fixed];
     const span = this.bounds.max[definition.fixed] - low;
-    const positions = [anchor];
-    for (const fraction of stableSliceFractions(64)) {
-      if (positions.length >= count) break;
-      const candidate = low + span * fraction;
-      if (positions.some(position => Math.abs(position - candidate) <= Math.max(1e-9, span * 1e-9))) continue;
-      positions.push(candidate);
-    }
-    return positions;
+    return evenSliceFractions(count).map(fraction => low + span * fraction);
   }
 
   effectiveResolution(axis) {
@@ -203,4 +185,4 @@ class OrthogonalFieldSlices extends ScalarFieldView {
   draw(renderer, context = {}) { for (const sample of this.samples) renderer?.box?.(sample.position, sample.scale, sample.color, false, this, context); }
 }
 
-export { MAX_SLICES_PER_AXIS, OrthogonalFieldSlices, stableSliceFractions, vanDerCorputBase2 };
+export { MAX_SLICES_PER_AXIS, OrthogonalFieldSlices, evenSliceFractions, stableSliceFractions };
