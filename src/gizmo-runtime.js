@@ -11,11 +11,7 @@ function quaternionToEulerRadians(value) {
 }
 
 function eulerRadiansToQuaternion(value) {
-  return quaternionFromEulerDegrees({
-    pitch: toDegrees(value[0]),
-    yaw: toDegrees(value[1]),
-    roll: toDegrees(value[2]),
-  });
+  return quaternionFromEulerDegrees({ pitch: toDegrees(value[0]), yaw: toDegrees(value[1]), roll: toDegrees(value[2]) });
 }
 
 function attachmentForWorldPosition(object, room, position) {
@@ -90,8 +86,12 @@ function installGizmoRuntime(root = document) {
   const viewport = viewportForCanvas(canvas);
   if (!viewport?.scene || !viewport.camera) throw new Error('Gizmo runtime requires an initialized S3D viewport');
 
-  // Disable the legacy direct-drag path immediately. Transform is opt-in through gizmos.
-  for (const candidate of manipulationCandidates(viewport.scene, root)) candidate.draggable = false;
+  const disableDirectDragging = () => {
+    for (const candidate of manipulationCandidates(viewport.scene, root)) candidate.draggable = false;
+  };
+  disableDirectDragging();
+  // Capture phase runs before the legacy PlaneDragController bubble listener, including for objects created later.
+  canvas.addEventListener('pointerdown', disableDirectDragging, true);
 
   const controller = new TransformGizmoController(canvas, viewport.camera, viewport.scene, {
     candidates: () => manipulationCandidates(viewport.scene, root),
@@ -101,7 +101,7 @@ function installGizmoRuntime(root = document) {
     onModeChanged: updateStatus,
   });
 
-  const panel = root.querySelector('.workspace-panel:not(.set-editor-panel):not(.room-editor-panel)');
+  const sidebar = root.querySelector('.sidebar');
   const row = document.createElement('div');
   row.className = 'gizmo-controls button-row';
   const label = document.createElement('label');
@@ -109,26 +109,32 @@ function installGizmoRuntime(root = document) {
   const checkbox = document.createElement('input');
   checkbox.type = 'checkbox';
   checkbox.dataset.role = 'gizmo-enable';
-  const text = document.createTextNode(' Gizmos');
   const status = document.createElement('span');
   status.className = 'coordinates';
   status.dataset.role = 'gizmo-status';
-  label.append(checkbox, text);
+  label.append(checkbox, document.createTextNode(' Gizmos'));
   row.append(label, status);
-  panel?.querySelector('header')?.after(row);
+  sidebar?.prepend(row);
 
   function updateStatus() {
-    const enabled = controller.enabled;
     const selected = controller.selected;
-    status.textContent = enabled ? `${controller.mode === 'rotate' ? 'Rotate' : 'Position'}${selected ? ` · ${selected.model?.name ?? selected.acousticObject?.id ?? selected.id}` : ''}` : 'Off';
-    canvas.dataset.gizmos = enabled ? 'on' : 'off';
+    status.textContent = controller.enabled ? `${controller.mode === 'rotate' ? 'Rotate' : 'Position'}${selected ? ` · ${selected.model?.name ?? selected.acousticObject?.id ?? selected.id}` : ''}` : 'Off';
+    canvas.dataset.gizmos = controller.enabled ? 'on' : 'off';
     canvas.dataset.gizmoMode = controller.mode;
   }
 
   checkbox.addEventListener('change', () => {
     controller.setEnabled(checkbox.checked);
+    disableDirectDragging();
     updateStatus();
   });
+
+  const destroyController = controller.destroy.bind(controller);
+  controller.destroy = () => {
+    canvas.removeEventListener('pointerdown', disableDirectDragging, true);
+    row.remove();
+    destroyController();
+  };
 
   updateStatus();
   return controller;
