@@ -59,3 +59,22 @@ test('room treatments remain visible when RoomEditor markers are hidden', () => 
   assert.equal(absorber.geometry.visible, true);
   assert.equal(bassTrap.geometry.visible, true);
 });
+
+test('RoomEditor transaction restores free-standing treatment transform and presentation rotation', () => {
+  const room = new RectangularRoom({ width: 6, height: 2.7, depth: 4.5 });
+  const geometry = new Box({ id: 'free-treatment-geometry', position: [1, .7, 2], scale: [.4, .3, .2] });
+  const object = new AcousticObject({ id: 'free-treatment', type: 'absorber', geometry, acousticModel: 'absorptive', attachment: null });
+  room.addAcousticObject(object);
+  const editor = makeEditor(room);
+  const snapshot = editor.captureTransaction();
+
+  geometry.setPosition([3, 1.5, 1]);
+  geometry.scale = [1, 1, 1];
+  object.setPresentationRotation([.2, .4, .6]);
+  editor.restoreTransaction(snapshot);
+
+  assert.equal(object.attachment, null);
+  assert.deepEqual(geometry.position, [1, .7, 2]);
+  assert.deepEqual(geometry.scale, [.4, .3, .2]);
+  assert.deepEqual(geometry.rotation, [0, 0, 0]);
+});
