@@ -33,27 +33,23 @@ Manufacturer-specific libraries can be added without changing solver or UI code.
 
 ## Run locally
 
-Clone only `AcousticMate`. The required S3D and WebGUI runtime snapshots are committed under `vendor/`, so no sibling clones or package installation are required.
-
-The canonical startup path runs the complete AcousticMate Node test suite as a conformance gate before opening the HTTP server. If any test fails, the server is not started.
+Clone only `AcousticMate`, serve its repository directory with any static HTTP server and open the server URL in a browser. The required S3D and WebGUI runtime snapshots are committed under `vendor/`, so no sibling clones or package installation are required.
 
 ```sh
 git clone https://github.com/Th3Hypn0tist/AcousticMate.git
 cd AcousticMate
-npm start
+python3 -m http.server 8000
 ```
 
-Open `http://127.0.0.1:8000/`.
+Open `http://localhost:8000/`.
 
-Optional environment variables:
+## Tests
 
-```sh
-ACOUSTICMATE_HOST=127.0.0.1 ACOUSTICMATE_PORT=8000 npm start
-```
+AcousticMate keeps runtime and test tooling separate.
 
-`npm test` runs the same AcousticMate suite without starting the server.
-
-Serving the repository directly with another static HTTP server bypasses the startup test gate and is therefore not the canonical development startup path.
+- `npm test` runs the Node unit/regression suite with `node --test`.
+- Browser tests exercise the actual browser runtime and UI behavior separately from the unit suite.
+- The application itself remains a static web application and does not depend on Node or npm at runtime.
 
 S3D and WebGUI remain independently owned standalone frameworks. Their `vendor/` copies are distribution snapshots used by AcousticMate and should be refreshed from the corresponding upstream repositories when framework versions are updated.
 
