@@ -141,6 +141,7 @@ class RectangularRoom {
     if (!object?.id || !object.geometry) throw new Error('Acoustic object requires id and geometry');
     if (this.acousticObjects.some(item => item.id === object.id)) throw new Error(`Acoustic object already exists: ${object.id}`);
     this.validateAcousticObject(object);
+    object.syncPresentationGeometry?.();
     object.room = this;
     this.acousticObjects.push(object);
     this.emit('acousticObjectAdded', { object });
