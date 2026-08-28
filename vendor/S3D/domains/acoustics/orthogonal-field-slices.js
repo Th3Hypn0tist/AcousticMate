@@ -7,6 +7,7 @@ const definitions = Object.freeze({
   y: { axes: [0, 2], fixed: 1, resolution: 'xz' },
   z: { axes: [0, 1], fixed: 2, resolution: 'xy' },
 });
+const MAX_SLICES_PER_AXIS = 10;
 
 function vanDerCorputBase2(index) {
   let n = Math.max(1, Math.floor(Number(index) || 1));
@@ -53,7 +54,7 @@ class OrthogonalFieldSlices extends ScalarFieldView {
   validateCount(axis, value) {
     if (!definitions[axis]) throw new Error(`Unknown slice axis: ${axis}`);
     value = Number(value);
-    if (!Number.isInteger(value) || value < 0 || value > 32) throw new Error(`Slice count ${axis} must be an integer from 0 to 32`);
+    if (!Number.isInteger(value) || value < 0 || value > MAX_SLICES_PER_AXIS) throw new Error(`Slice count ${axis} must be an integer from 0 to ${MAX_SLICES_PER_AXIS}`);
     return value;
   }
   validateOpacity(value) {
@@ -194,4 +195,4 @@ class OrthogonalFieldSlices extends ScalarFieldView {
   draw(renderer, context = {}) { for (const sample of this.samples) renderer?.box?.(sample.position, sample.scale, sample.color, false, this, context); }
 }
 
-export { OrthogonalFieldSlices, stableSliceFractions, vanDerCorputBase2 };
+export { MAX_SLICES_PER_AXIS, OrthogonalFieldSlices, stableSliceFractions, vanDerCorputBase2 };
