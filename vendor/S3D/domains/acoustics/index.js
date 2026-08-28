@@ -5,3 +5,4 @@ export { SpeakerNode } from './speaker-node.js';
 export { SampledFieldPlane } from './sampled-field-plane.js';
 export { OrthogonalFieldSlices } from './orthogonal-field-slices.js';
 export { FieldViewRangeCoordinator } from './field-view-range-coordinator.js';
+export { SpatialSamplingPolicy, viewSamplingFrequency } from './spatial-sampling-policy.js';
