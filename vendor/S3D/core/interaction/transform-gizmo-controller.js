@@ -232,11 +232,13 @@ class TransformGizmoController {
   destroy() {
     this.removeLayer?.();
     const canvas = this.canvas;
+    const pointerId = this.pointer?.id;
+    this.pointer = null;
+    if (pointerId != null && canvas.hasPointerCapture?.(pointerId)) canvas.releasePointerCapture(pointerId);
     canvas.removeEventListener('pointerdown', this.onPointerDown);
     canvas.removeEventListener('pointermove', this.onPointerMove);
     canvas.removeEventListener('pointerup', this.onPointerUp);
     canvas.removeEventListener('pointercancel', this.onPointerUp);
-    this.pointer = null;
     this.selected = null;
   }
 }
