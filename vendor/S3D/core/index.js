@@ -8,9 +8,10 @@ import { FloatStore, RenderStore } from './render_store.js';
 import { GlyphAtlas, WebGLBatchRenderer } from './webgl_batch_renderer.js';
 import { WebGLImageRenderer } from './webgl_image_renderer.js';
 import { PerspectiveCamera } from './camera.js';
-import { Viewport } from './viewport.js';
+import { Viewport, viewportForCanvas } from './viewport.js';
 import { OrbitControls } from './interaction/orbit-controls.js';
 import { PlaneDragController } from './interaction/plane-drag-controller.js';
+import { TransformGizmoController } from './interaction/transform-gizmo-controller.js';
 import { SceneObject, Group } from './objects/object.js';
 import { Primitive, Box, Point, Cylinder } from './objects/primitives.js';
 import { Anchor } from './objects/anchors.js';
@@ -30,7 +31,7 @@ import { ExtrudedVolume } from './geometry/extruded-volume.js';
 const S3D = Object.freeze({
   version: S3D_VERSION, Scene, Selection, Playback, normalizePlaybackBoundaries,
   Vec3, Mat4, Renderer, FloatStore, RenderStore, GlyphAtlas, WebGLBatchRenderer, WebGLImageRenderer,
-  PerspectiveCamera, Viewport, OrbitControls, PlaneDragController, SceneObject, Group,
+  PerspectiveCamera, Viewport, viewportForCanvas, OrbitControls, PlaneDragController, TransformGizmoController, SceneObject, Group,
   Primitive, Box, Point, Cylinder, Anchor, Link, PropsItem, Props, EventItem, Events, Pulse, Highlight,
   ImageReferenceLayer, PolygonEditor, Measurement, ConstraintGeometrySolver, ExtrudedVolume,
 });
@@ -38,7 +39,7 @@ const S3D = Object.freeze({
 export {
   S3D, S3D_VERSION, Scene, Selection, Playback, normalizePlaybackBoundaries,
   Vec3, Mat4, Renderer, FloatStore, RenderStore, GlyphAtlas, WebGLBatchRenderer, WebGLImageRenderer,
-  PerspectiveCamera, Viewport, OrbitControls, PlaneDragController, SceneObject, Group,
+  PerspectiveCamera, Viewport, viewportForCanvas, OrbitControls, PlaneDragController, TransformGizmoController, SceneObject, Group,
   Primitive, Box, Point, Cylinder, Anchor, Link, PropsItem, Props, EventItem, Events, Pulse, Highlight,
   ImageReferenceLayer, PolygonEditor, polygonEdges, Measurement, resolveAnchor,
   ConstraintGeometrySolver, residuals, ExtrudedVolume,
