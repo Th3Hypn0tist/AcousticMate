@@ -9,6 +9,7 @@ import { RoomEditor } from './room-editor.js';
 import { Speaker } from './speaker.js';
 import { SpeakerLibrary } from './speaker-library.js';
 import { SpeakerSet } from './speaker-set.js';
+import { SpeakerSetEditorState } from './speaker-set-editor-state.js';
 import { alignMembers, applyClusterLayout, applyLineArrayLayout, applySubArrayLayout, distributeMembers, mirrorMembers } from './speaker-set-layouts.js';
 import { eulerDegreesFromQuaternion, quaternionFromEulerDegrees } from './spatial.js';
 import { SignalChain } from './signal-chain.js';
@@ -42,7 +43,7 @@ let customModelSequence = 0;
 const scene = new Scene();
 const speakerLibrary = new SpeakerLibrary();
 const crossoverNetwork = new CrossoverNetwork();
-const editorState = { set: null, room: false, camera: null };
+const editorState = { set: null, setHelperState: null, room: false, camera: null };
 
 async function loadSpeakerLibrary() {
   const manifestUrl = new URL('../speaker-library/manifest.json', import.meta.url);
@@ -360,10 +361,12 @@ function syncSpeakerNode(speaker) {
   if (editedSet && speaker.parentSet === editedSet) {
     const member = editedSet.memberForSpeaker(speaker);
     node.setPosition(member.localPosition, { emit: false });
+    node.setDirectionOrientation?.(member.localOrientation);
     node.visible = true;
     node.draggable = true;
     return;
   }
+  node.setDirectionOrientation?.(null);
   node.setPosition(speaker.position, { emit: false });
   node.visible = !editedSet && !editorState.room;
   node.draggable = !speaker.parentSet && !editedSet && !editorState.room;
@@ -572,44 +575,50 @@ function ensureMemberCount(set, count) {
   }
   return set;
 }
+function requireSetHelperState(set) {
+  const state = editorState.setHelperState;
+  if (!state || state.set !== set) throw new Error('SpeakerSet helper state is not initialized for this editor session');
+  state.syncMemberCount();
+  return state;
+}
 
 function typeHelperControls(set) {
+  const state = requireSetHelperState(set);
+  const values = state.values;
   if (set.type === 'line-array') {
-    const values = { count: Math.max(1, set.members.length || 4), spacing: .28, splay: 5, tilt: 0, curvature: 0 };
     return gui.h('fieldset', { className: 'set-helper' }, [
       gui.h('legend', { text: 'Line array layout' }),
-      numberControl('Element count', values.count, { min: 1, max: 64, step: 1, invalidate: false, update: value => { values.count = value; } }),
-      numberControl('Spacing (m)', values.spacing, { min: 0, max: 3, step: .01, invalidate: false, update: value => { values.spacing = value; } }),
-      numberControl('Splay / element (°)', values.splay, { min: -30, max: 30, step: .5, invalidate: false, update: value => { values.splay = value; } }),
-      numberControl('Total curvature override (°)', values.curvature, { min: -180, max: 180, step: 1, invalidate: false, update: value => { values.curvature = value; } }),
-      numberControl('Array tilt (°)', values.tilt, { min: -90, max: 90, step: .5, invalidate: false, update: value => { values.tilt = value; } }),
+      numberControl('Element count', values.count, { min: 1, max: 64, step: 1, invalidate: false, update: value => state.setValue('count', value) }),
+      numberControl('Spacing (m)', values.spacing, { min: 0, max: 3, step: .01, invalidate: false, update: value => state.setValue('spacing', value) }),
+      numberControl('Splay / element (°)', values.splay, { min: -30, max: 30, step: .5, invalidate: false, update: value => state.setValue('splay', value) }),
+      numberControl('Total curvature override (°)', values.curvature, { min: -180, max: 180, step: 1, invalidate: false, update: value => state.setValue('curvature', value) }),
+      numberControl('Array tilt (°)', values.tilt, { min: -90, max: 90, step: .5, invalidate: false, update: value => state.setValue('tilt', value) }),
       gui.button('Apply line array', { on: { click: () => {
         ensureMemberCount(set, values.count);
         const splayDeg = Math.abs(values.curvature) > 1e-9 && set.members.length > 1 ? values.curvature / (set.members.length - 1) : values.splay;
         applyLineArrayLayout(set, { spacing: values.spacing, splayDeg, arrayTiltDeg: values.tilt });
+        state.applied();
         renderSetEditor(set);
         invalidateField();
       } } }),
     ]);
   }
   if (set.type === 'cluster') {
-    const values = { radius: .35, spread: 60 };
     return gui.h('fieldset', { className: 'set-helper' }, [
       gui.h('legend', { text: 'Cluster layout' }),
-      numberControl('Radius (m)', values.radius, { min: 0, max: 10, step: .01, invalidate: false, update: value => { values.radius = value; } }),
-      numberControl('Spread (°)', values.spread, { min: -180, max: 180, step: 1, invalidate: false, update: value => { values.spread = value; } }),
+      numberControl('Radius (m)', values.radius, { min: 0, max: 10, step: .01, invalidate: false, update: value => state.setValue('radius', value) }),
+      numberControl('Spread (°)', values.spread, { min: -180, max: 180, step: 1, invalidate: false, update: value => state.setValue('spread', value) }),
       gui.button('Apply cluster', { on: { click: () => { applyClusterLayout(set, { radius: values.radius, spreadDeg: values.spread }); renderSetEditor(set); invalidateField(); } } }),
     ]);
   }
   if (set.type === 'sub-array') {
-    const values = { count: Math.max(1, set.members.length || 2), spacing: .8, arc: 0, radius: 4 };
     return gui.h('fieldset', { className: 'set-helper' }, [
       gui.h('legend', { text: 'Sub array layout' }),
-      numberControl('Element count', values.count, { min: 1, max: 64, step: 1, invalidate: false, update: value => { values.count = value; } }),
-      numberControl('Spacing (m)', values.spacing, { min: 0, max: 10, step: .01, invalidate: false, update: value => { values.spacing = value; } }),
-      numberControl('Arc (°)', values.arc, { min: -180, max: 180, step: 1, invalidate: false, update: value => { values.arc = value; } }),
-      numberControl('Radius (m)', values.radius, { min: 0, max: 100, step: .1, invalidate: false, update: value => { values.radius = value; } }),
-      gui.button('Apply sub array', { on: { click: () => { ensureMemberCount(set, values.count); applySubArrayLayout(set, { spacing: values.spacing, arcDeg: values.arc, radius: values.radius }); renderSetEditor(set); invalidateField(); } } }),
+      numberControl('Element count', values.count, { min: 1, max: 64, step: 1, invalidate: false, update: value => state.setValue('count', value) }),
+      numberControl('Spacing (m)', values.spacing, { min: 0, max: 10, step: .01, invalidate: false, update: value => state.setValue('spacing', value) }),
+      numberControl('Arc (°)', values.arc, { min: -180, max: 180, step: 1, invalidate: false, update: value => state.setValue('arc', value) }),
+      numberControl('Radius (m)', values.radius, { min: 0, max: 100, step: .1, invalidate: false, update: value => state.setValue('radius', value) }),
+      gui.button('Apply sub array', { on: { click: () => { ensureMemberCount(set, values.count); applySubArrayLayout(set, { spacing: values.spacing, arcDeg: values.arc, radius: values.radius }); state.applied(); renderSetEditor(set); invalidateField(); } } }),
     ]);
   }
   return gui.h('p', { className: 'hint', text: 'Generic set: edit member transforms freely.' });
@@ -646,6 +655,7 @@ function openSetEditor(set) {
   if (editorState.set === set || editorState.room) return;
   editorState.camera = { position: [...camera.position], target: [...camera.target] };
   editorState.set = set;
+  editorState.setHelperState = new SpeakerSetEditorState(set);
   mainPanel.hidden = true;
   setEditorPanel.hidden = false;
   roomEditorPanel.hidden = true;
@@ -659,6 +669,7 @@ function closeSetEditor() {
   if (!set) return;
   set.syncAll();
   editorState.set = null;
+  editorState.setHelperState = null;
   setEditorPanel.hidden = true;
   mainPanel.hidden = false;
   if (editorState.camera) { camera.position = [...editorState.camera.position]; camera.target = [...editorState.camera.target]; }
