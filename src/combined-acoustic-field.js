@@ -26,14 +26,16 @@ class FrequencySliceField {
     this.owner = owner;
     this.frequency = Number(frequencyHz);
     this.component = component;
+    this.rangeEpoch = 0;
     this.bounds = owner.domain.bounds;
     this.range = [0, Infinity];
   }
   setComponent(value) { if (!FIELD_COMPONENTS.has(value)) throw new Error(`Unknown acoustic field component: ${value}`); this.component = value; return this; }
+  resetDisplayRange() { this.rangeEpoch += 1; return this; }
   sample(x, y, z) { return sampleComponent(this.owner, this.component, x, y, z, this.frequency, false); }
   sampleComplex(x, y, z) { return sampleComponent(this.owner, this.component, x, y, z, this.frequency, true); }
   sampleComponents(x, y, z) { return this.owner.hybridField.sampleComponentsComplexAtFrequency(x, y, z, this.frequency); }
-  analysisSignature() { return `component:${this.component}`; }
+  analysisSignature() { return `component:${this.component}:range:${this.rangeEpoch}`; }
 }
 
 class PhaseAwareFrequencyField {
@@ -43,13 +45,15 @@ class PhaseAwareFrequencyField {
     this.range = [0, Infinity];
     this.frequency = null;
     this.frequencyRange = [...owner.frequencyRange];
+    this.rangeEpoch = 0;
     this.setComponent(component);
   }
   setComponent(value) { if (!FIELD_COMPONENTS.has(value)) throw new Error(`Unknown acoustic field component: ${value}`); this.component = value; return this; }
+  resetDisplayRange() { this.rangeEpoch += 1; return this; }
   sample(x, y, z, frequencyHz) { return sampleComponent(this.owner, this.component, x, y, z, frequencyHz, false); }
   sampleComplex(x, y, z, frequencyHz) { return sampleComponent(this.owner, this.component, x, y, z, frequencyHz, true); }
   sampleComponents(x, y, z, frequencyHz) { return this.owner.hybridField.sampleComponentsComplexAtFrequency(x, y, z, frequencyHz); }
-  analysisSignature() { return `component:${this.component}`; }
+  analysisSignature() { return `component:${this.component}:range:${this.rangeEpoch}`; }
 }
 
 class CombinedAcousticField {
