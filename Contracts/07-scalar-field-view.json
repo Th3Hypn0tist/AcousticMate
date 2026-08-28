@@ -19,6 +19,7 @@
       "YZ cross-room slices at selected X positions"
     ],
     "sliceCountPerAxis": "integer 0..10",
+    "sliceDistribution": "for count > 1, redistribute the family evenly through the room interior using relative positions i/(count+1); count 1 retains the selected anchor position",
     "colorScale": "shared across active field views",
     "rangeInvariant": "changing only orthogonal slice count is a visualization-topology change and must not change the shared display range or recolor the existing 2D heatmap",
     "mustNot": "represent a single floor-level XZ slice as the complete 3D field"
@@ -34,7 +35,8 @@
   "controls": {
     "frequency": "number | null",
     "frequencyRange": "[minHz,maxHz] | null",
-    "aggregation": "single | peak | rms | energy | sum"
+    "aggregation": "single | peak | rms | energy | sum",
+    "sliceOpacity": "S3D value 0..1; AcousticMate UI exposes 1..100 percent with logarithmic mapping, reserving 75 percent of slider travel for 1..20 percent and 25 percent for 20..100 percent"
   },
   "operations": [
     "setField",
