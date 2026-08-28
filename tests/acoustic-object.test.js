@@ -67,6 +67,18 @@ test('RectangularRoom validates attached acoustic object patches and binds objec
   assert.equal(object.room, null);
 });
 
+test('free-standing acoustic objects do not create wall boundary loss', () => {
+  const dimensions = { width: 4, height: 2.5, depth: 3 };
+  const mode = { nx: 1, ny: 0, nz: 0, frequency: 42.875 };
+  const freeStanding = new AcousticObject({
+    id: 'free-absorber', type: 'absorber', geometry: new Box({ id: 'free-absorber-geometry' }), acousticModel: 'absorptive',
+    materialProfile: { absorption: [[20, 1], [20000, 1]] },
+    attachment: null,
+  });
+  assert.equal(freeStanding.attachment, null);
+  assert.equal(acousticObjectInverseQ(mode, [freeStanding], dimensions), 0);
+});
+
 test('absorptive object increases modal inverse Q while diffuser does not fake scattering loss', () => {
   const dimensions = { width: 4, height: 2.5, depth: 3 };
   const mode = { nx: 1, ny: 0, nz: 0, frequency: 42.875 };
