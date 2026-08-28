@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Speaker } from '../src/speaker.js';
 import { SpeakerSet } from '../src/speaker-set.js';
-import { applyClusterLayout, applyLineArrayLayout, applySubArrayLayout } from '../src/speaker-set-layouts.js';
+import { applyClusterLayout, applyLineArrayLayout, applySubArrayLayout, mirrorMembers } from '../src/speaker-set-layouts.js';
 import { eulerDegreesFromQuaternion, quaternionFromEulerDegrees } from '../src/spatial.js';
 
 const close = (actual, expected, tolerance = 1e-9) => assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} != ${expected}`);
@@ -60,4 +60,26 @@ test('cluster helper fans members around the set forward axis', () => {
   close(yaws[0], -30, 1e-7);
   close(yaws[1], 0, 1e-7);
   close(yaws[2], 30, 1e-7);
+});
+
+test('layout helpers preserve Speaker, member and processing identity', () => {
+  const speakers = [0, 1, 2].map(index => new Speaker({ id: `identity-${index}` }));
+  const set = new SpeakerSet({
+    id: 'identity-set',
+    type: 'line-array',
+    members: speakers.map((speaker, index) => ({ speaker, gainTrimDb: index - 1, delayTrimMs: index * .5 })),
+  });
+  const members = [...set.members];
+  const processing = members.map(member => [member.gainTrimDb, member.delayTrimMs]);
+
+  applyLineArrayLayout(set, { spacing: .3, splayDeg: 4, arrayTiltDeg: -2 });
+  mirrorMembers(set, { axis: 'x' });
+
+  assert.deepEqual(set.members, members);
+  set.members.forEach((member, index) => {
+    assert.equal(member, members[index]);
+    assert.equal(member.speaker, speakers[index]);
+    assert.equal(member.speaker.parentSet, set);
+    assert.deepEqual([member.gainTrimDb, member.delayTrimMs], processing[index]);
+  });
 });
