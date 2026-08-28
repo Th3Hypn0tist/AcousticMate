@@ -36,6 +36,22 @@ test('RoomEditor primitive creation never infers shape from acoustic type', () =
   assert.throws(() => RoomEditor.prototype.createAcousticGeometry.call({}, 'absorber', 'plane', 'invalid'));
 });
 
+test('AcousticObject presentation rotation persists through metadata and resets when absent', () => {
+  const geometry = new Box({ id: 'rotating-treatment' });
+  const object = new AcousticObject({ id: 'rotating-treatment', type: 'absorber', geometry, acousticModel: 'absorptive' });
+  object.setPresentationRotation([.1, .2, .3]);
+  assert.deepEqual(object.metadata.presentationRotation, [.1, .2, .3]);
+  assert.deepEqual(geometry.rotation, [.1, .2, .3]);
+
+  geometry.setRotation([1, 1, 1], { emit: false });
+  object.syncPresentationGeometry();
+  assert.deepEqual(geometry.rotation, [.1, .2, .3]);
+
+  object.metadata = {};
+  object.syncPresentationGeometry();
+  assert.deepEqual(geometry.rotation, [0, 0, 0]);
+});
+
 test('RectangularRoom validates attached acoustic object patches and binds object to room', () => {
   const room = new RectangularRoom({ width: 4, height: 2.5, depth: 3 });
   const object = new AcousticObject({
