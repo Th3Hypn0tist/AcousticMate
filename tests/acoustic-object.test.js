@@ -7,10 +7,7 @@ import { RectangularRoomField, acousticObjectInverseQ } from '../src/rectangular
 
 test('AcousticObject accepts S3D primitive geometry and interpolates absorption', () => {
   const object = new AcousticObject({
-    id: 'absorber-1',
-    type: 'absorber',
-    geometry: new Box({ id: 'absorber-geometry' }),
-    acousticModel: 'absorptive',
+    id: 'absorber-1', type: 'absorber', geometry: new Box({ id: 'absorber-geometry' }), acousticModel: 'absorptive',
     materialProfile: new AcousticMaterialProfile({ absorption: [[100, .2], [200, .8]] }),
     attachment: { wall: 'z-min', offset: 1, width: 1, height: .6, sillHeight: .5 },
   });
@@ -19,43 +16,47 @@ test('AcousticObject accepts S3D primitive geometry and interpolates absorption'
   assert.equal(object.absorptionAt(200), .8);
 });
 
-test('RectangularRoom validates attached acoustic object patches', () => {
+test('bass-trap acoustic identity is independent of primitive shape', () => {
+  const boxTrap = new AcousticObject({
+    id: 'bass-trap-box', type: 'bass-trap', geometry: new Box({ id: 'bass-trap-box-geometry' }), acousticModel: 'absorptive',
+    materialProfile: { absorption: [[20, .7], [20000, .7]] },
+    attachment: { wall: 'x-min', offset: .25, width: .5, height: 2, sillHeight: 0 },
+  });
+  assert.equal(boxTrap.type, 'bass-trap');
+  assert.equal(boxTrap.geometry.primitive, 'box');
+  assert.equal(boxTrap.geometry.acousticObject, boxTrap);
+});
+
+test('RectangularRoom validates attached acoustic object patches and binds object to room', () => {
   const room = new RectangularRoom({ width: 4, height: 2.5, depth: 3 });
   const object = new AcousticObject({
-    id: 'absorber-1',
-    type: 'absorber',
-    geometry: new Box({ id: 'absorber-geometry' }),
-    acousticModel: 'absorptive',
+    id: 'absorber-1', type: 'absorber', geometry: new Box({ id: 'absorber-geometry' }), acousticModel: 'absorptive',
     materialProfile: { absorption: [[20, .6], [20000, .6]] },
     attachment: { wall: 'z-min', offset: 1, width: 1, height: 1, sillHeight: .5 },
   });
   room.addAcousticObject(object);
   assert.equal(room.acousticObjects.length, 1);
+  assert.equal(object.room, room);
   assert.throws(() => room.updateAcousticObject(object, { attachment: { wall: 'z-min', offset: 3.5, width: 1, height: 1, sillHeight: .5 } }));
+  room.removeAcousticObject(object);
+  assert.equal(object.room, null);
 });
 
 test('absorptive object increases modal inverse Q while diffuser does not fake scattering loss', () => {
   const dimensions = { width: 4, height: 2.5, depth: 3 };
   const mode = { nx: 1, ny: 0, nz: 0, frequency: 42.875 };
   const absorber = new AcousticObject({
-    id: 'absorber',
-    type: 'absorber',
-    geometry: new Box({ id: 'a' }),
-    acousticModel: 'absorptive',
+    id: 'absorber', type: 'absorber', geometry: new Box({ id: 'a' }), acousticModel: 'absorptive',
     materialProfile: { absorption: [[20, .8], [20000, .8]] },
     attachment: { wall: 'z-min', offset: 1, width: 1, height: 1, sillHeight: .5 },
   });
   const diffuser = new AcousticObject({
-    id: 'diffuser',
-    type: 'diffuser',
-    geometry: new Box({ id: 'd' }),
-    acousticModel: 'scattering',
+    id: 'diffuser', type: 'diffuser', geometry: new Box({ id: 'd' }), acousticModel: 'scattering',
     materialProfile: { scattering: [[20, .8], [20000, .8]] },
     attachment: { wall: 'z-min', offset: 1, width: 1, height: 1, sillHeight: .5 },
   });
   assert.ok(acousticObjectInverseQ(mode, [absorber], dimensions) > 0);
   assert.equal(acousticObjectInverseQ(mode, [diffuser], dimensions), 0);
-
   const field = new RectangularRoomField({ dimensions, acousticObjects: [absorber], maxFrequency: 100 });
   assert.equal(field.acousticObjects.length, 1);
 });
