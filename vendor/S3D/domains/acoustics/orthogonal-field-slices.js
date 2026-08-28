@@ -1,5 +1,6 @@
 import { ScalarFieldView } from './scalar-field-view.js';
 import { defaultColor } from './sampled-field-plane.js';
+import { SpatialSamplingPolicy, viewSamplingFrequency } from './spatial-sampling-policy.js';
 
 const definitions = Object.freeze({
   x: { axes: [2, 1], fixed: 0, resolution: 'yz' },
@@ -25,12 +26,14 @@ function stableSliceFractions(count) {
 }
 
 class OrthogonalFieldSlices extends ScalarFieldView {
-  constructor({ id, field, bounds, slices = null, counts = {}, resolution = {}, thickness = .018, opacity = .28, opacities = {}, color = defaultColor, range = null, frequency = null, frequencyRange = null, aggregation = 'single', metadata = {} } = {}) {
+  constructor({ id, field, bounds, slices = null, counts = {}, resolution = {}, thickness = .018, opacity = .28, opacities = {}, color = defaultColor, range = null, frequency = null, frequencyRange = null, aggregation = 'single', samplingPolicy = null, metadata = {} } = {}) {
     super({ id, field, range, frequency, frequencyRange, aggregation, selectable: false, metadata });
     if (!bounds?.min || !bounds?.max) throw new Error('OrthogonalFieldSlices requires min/max volume bounds');
     this.bounds = { min: [...bounds.min], max: [...bounds.max] };
     this.slices = slices ? { ...slices } : { x: (bounds.min[0] + bounds.max[0]) / 2, y: (bounds.min[1] + bounds.max[1]) / 2, z: (bounds.min[2] + bounds.max[2]) / 2 };
     this.resolution = { xz: [32, 24], xy: [32, 16], yz: [24, 16], ...resolution };
+    this.samplingPolicy = samplingPolicy ?? new SpatialSamplingPolicy();
+    this.samplingState = {};
     this.counts = { x: 1, y: 1, z: 1, ...counts };
     this.thickness = Number(thickness);
     this.opacity = this.validateOpacity(opacity);
@@ -84,6 +87,7 @@ class OrthogonalFieldSlices extends ScalarFieldView {
     return this.recolor();
   }
   setResolution(name, value) { this.resolution[name] = [...value]; return this.invalidate(); }
+  setSamplingPolicy(value) { this.samplingPolicy = value ?? new SpatialSamplingPolicy(); return this.invalidate(); }
   invalidate() {
     this.sliceSampleCache.clear();
     this.dirty = true;
@@ -109,15 +113,27 @@ class OrthogonalFieldSlices extends ScalarFieldView {
     return positions;
   }
 
-  sliceCacheKey(axis, fixedPosition) {
+  effectiveResolution(axis) {
     const definition = definitions[axis];
-    const resolution = this.resolution[definition.resolution];
+    if (!definition) throw new Error(`Unknown slice axis: ${axis}`);
+    const [uAxis, vAxis] = definition.axes;
+    const state = this.samplingPolicy.resolutionFor({
+      lengths: [this.bounds.max[uAxis] - this.bounds.min[uAxis], this.bounds.max[vAxis] - this.bounds.min[vAxis]],
+      baseResolution: this.resolution[definition.resolution],
+      frequencyHz: viewSamplingFrequency(this),
+    });
+    this.samplingState[axis] = state;
+    return state.resolution;
+  }
+
+  sliceCacheKey(axis, fixedPosition) {
+    const resolution = this.effectiveResolution(axis);
     return `${axis}|${fixedPosition.toPrecision(15)}|${resolution[0]}x${resolution[1]}`;
   }
 
   sampleSlice(axis, fixedPosition = this.slices[axis]) {
     const definition = definitions[axis];
-    const [nu, nv] = this.resolution[definition.resolution].map(Number);
+    const [nu, nv] = this.effectiveResolution(axis).map(Number);
     if (!Number.isInteger(nu) || !Number.isInteger(nv) || nu < 2 || nv < 2) throw new Error(`Slice ${axis} resolution requires two integers >= 2`);
     const [uAxis, vAxis] = definition.axes;
     const du = (this.bounds.max[uAxis] - this.bounds.min[uAxis]) / nu;
