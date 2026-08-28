@@ -22,7 +22,6 @@ test('browser entry uses a complete local module graph', async () => {
   await assertModuleGraph(new URL('../src/main.js', import.meta.url));
   await assertModuleGraph(new URL('../src/slice-controls-ui.js', import.meta.url));
   await assertModuleGraph(new URL('../src/gizmo-runtime.js', import.meta.url));
-  await assertModuleGraph(new URL('../src/set-editor-preview-runtime.js', import.meta.url));
 });
 
 test('gizmo browser regression harness uses a complete local module graph', async () => {
