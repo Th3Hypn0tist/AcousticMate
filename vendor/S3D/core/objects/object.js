@@ -42,6 +42,12 @@ class SceneObject {
     if (emit) this.emit('positionChanged', { previous, position: [...this.position] });
     return this;
   }
+  setRotation(rotation, { emit = true } = {}) {
+    const previous = [...this.rotation];
+    this.rotation = vec3(rotation, this.rotation);
+    if (emit) this.emit('rotationChanged', { previous, rotation: [...this.rotation] });
+    return this;
+  }
   add(child) {
     if (!(child instanceof SceneObject)) throw new Error('SceneObject child must be a SceneObject');
     if (child === this) throw new Error('SceneObject cannot parent itself');
