@@ -16,6 +16,7 @@ AcousticMate is a browser-based room-acoustics tool built from the standalone We
 - live field resampling while a speaker or set moves
 - selectable 2D heatmap, 3D orthogonal slices or both together
 - independently adjustable 3D slice counts per axis
+- wavelength-aware spatial sampling with a bounded interactive resolution budget
 - horizontal dragging and Shift-drag vertical placement
 - per-speaker gain, delay and polarity
 - Butterworth, Linkwitz–Riley and Bessel high/low-pass filters
@@ -32,15 +33,27 @@ Manufacturer-specific libraries can be added without changing solver or UI code.
 
 ## Run locally
 
-Clone only `AcousticMate`, serve its repository directory with any static HTTP server and open the server URL in a browser. The required S3D and WebGUI runtime snapshots are committed under `vendor/`, so no sibling clones or package installation are required.
+Clone only `AcousticMate`. The required S3D and WebGUI runtime snapshots are committed under `vendor/`, so no sibling clones or package installation are required.
+
+The canonical startup path runs the complete AcousticMate Node test suite as a conformance gate before opening the HTTP server. If any test fails, the server is not started.
 
 ```sh
 git clone https://github.com/Th3Hypn0tist/AcousticMate.git
 cd AcousticMate
-python3 -m http.server 8000
+npm start
 ```
 
-Open `http://localhost:8000/`.
+Open `http://127.0.0.1:8000/`.
+
+Optional environment variables:
+
+```sh
+ACOUSTICMATE_HOST=127.0.0.1 ACOUSTICMATE_PORT=8000 npm start
+```
+
+`npm test` runs the same AcousticMate suite without starting the server.
+
+Serving the repository directly with another static HTTP server bypasses the startup test gate and is therefore not the canonical development startup path.
 
 S3D and WebGUI remain independently owned standalone frameworks. Their `vendor/` copies are distribution snapshots used by AcousticMate and should be refreshed from the corresponding upstream repositories when framework versions are updated.
 
