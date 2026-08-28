@@ -87,8 +87,7 @@ class AcousticObject {
     return this;
   }
   syncPresentationGeometry() {
-    if (this.metadata?.presentationRotation == null) return this;
-    const rotation = rotation3(this.metadata.presentationRotation);
+    const rotation = this.metadata?.presentationRotation == null ? [0, 0, 0] : rotation3(this.metadata.presentationRotation);
     this.geometry.setRotation?.(rotation, { emit: false });
     return this;
   }
