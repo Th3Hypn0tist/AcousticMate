@@ -54,6 +54,8 @@ class AcousticObject {
     this.attachment = attachment ? { ...attachment } : null;
     this.metadata = { ...metadata };
     this.listeners = new Map();
+    this.room = null;
+    this.geometry.acousticObject = this;
   }
 
   on(event, listener) {
