@@ -7,6 +7,11 @@ function finite(value, name) {
   return value;
 }
 
+function rotation3(value, name = 'Presentation rotation') {
+  if (!Array.isArray(value) || value.length !== 3) throw new Error(`${name} must be [x,y,z]`);
+  return value.map((item, index) => finite(item, `${name}[${index}]`));
+}
+
 function profilePoints(value, name) {
   if (value == null) return [];
   if (!Array.isArray(value)) throw new Error(`${name} must be an array`);
@@ -56,6 +61,7 @@ class AcousticObject {
     this.listeners = new Map();
     this.room = null;
     this.geometry.acousticObject = this;
+    this.syncPresentationGeometry();
   }
 
   on(event, listener) {
@@ -73,8 +79,21 @@ class AcousticObject {
     return this;
   }
   setMaterialProfile(value) { this.materialProfile = value instanceof AcousticMaterialProfile ? value : new AcousticMaterialProfile(value ?? {}); this.emit('changed'); return this; }
+  setPresentationRotation(value, { emit = true } = {}) {
+    const rotation = rotation3(value);
+    this.metadata.presentationRotation = [...rotation];
+    this.geometry.setRotation?.(rotation, { emit: false });
+    if (emit) this.emit('changed', { presentationRotation: [...rotation] });
+    return this;
+  }
+  syncPresentationGeometry() {
+    if (this.metadata?.presentationRotation == null) return this;
+    const rotation = rotation3(this.metadata.presentationRotation);
+    this.geometry.setRotation?.(rotation, { emit: false });
+    return this;
+  }
   absorptionAt(frequencyHz) { return this.acousticModel === 'absorptive' || this.acousticModel === 'impedance' ? this.materialProfile.absorptionAt(frequencyHz) : 0; }
   scatteringAt(frequencyHz) { return this.acousticModel === 'scattering' ? this.materialProfile.scatteringAt(frequencyHz) : 0; }
 }
 
-export { AcousticObject, AcousticMaterialProfile, BOUNDARY_MODELS, OBJECT_TYPES };
+export { AcousticObject, AcousticMaterialProfile, BOUNDARY_MODELS, OBJECT_TYPES, rotation3 };
