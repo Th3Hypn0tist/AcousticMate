@@ -26,9 +26,9 @@ class FloatStore {
 
 class RenderStore {
   constructor() {
-    this.solidBoxes = new FloatStore(10 * 1024);
-    this.transparentBoxes = new FloatStore(10 * 1024);
-    this.outlineBoxes = new FloatStore(10 * 512);
+    this.solidBoxes = new FloatStore(13 * 1024);
+    this.transparentBoxes = new FloatStore(13 * 1024);
+    this.outlineBoxes = new FloatStore(13 * 512);
     this.lines = new FloatStore(6 * 2048);
     this.glyphs = new FloatStore(14 * 4096);
     this.flowPulses = new FloatStore(14 * 2048);
@@ -46,7 +46,7 @@ class RenderStore {
     this.flowPulses.clear();
     for (const key of Object.keys(this.counts)) this.counts[key] = 0;
   }
-  box(position, scale, color, outline = false) {
+  box(position, scale, color, outline = false, rotation = [0, 0, 0]) {
     if (!this.viewProjection) throw new Error('RenderStore.box requires begin()');
     const rawAlpha = Number(color[3] ?? 1);
     const alpha = Number.isFinite(rawAlpha) ? Math.max(0, Math.min(1, rawAlpha)) : 1;
@@ -55,6 +55,7 @@ class RenderStore {
     target.push(
       Number(position[0]), Number(position[1]), Number(position[2]),
       Number(scale[0]), Number(scale[1]), Number(scale[2]),
+      Number(rotation[0] ?? 0), Number(rotation[1] ?? 0), Number(rotation[2] ?? 0),
       Number(color[0]), Number(color[1]), Number(color[2]),
       alpha,
     );
