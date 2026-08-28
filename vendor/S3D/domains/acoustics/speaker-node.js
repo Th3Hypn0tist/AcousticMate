@@ -7,6 +7,13 @@ function normalizedDirection(value) {
   return value.map(component => component / magnitude);
 }
 
+function normalizedOrientation(value) {
+  if (!Array.isArray(value) || value.length !== 4 || value.some(component => !Number.isFinite(component))) throw new Error('SpeakerNode direction orientation must be a finite quaternion');
+  const magnitude = Math.hypot(...value);
+  if (magnitude <= Number.EPSILON) throw new Error('SpeakerNode direction orientation must not be zero');
+  return value.map(component => component / magnitude);
+}
+
 function quaternionDirection(orientation, forward = [0, 0, 1]) {
   if (!Array.isArray(orientation) || orientation.length !== 4 || orientation.some(component => !Number.isFinite(component))) return normalizedDirection(forward);
   const magnitude = Math.hypot(...orientation);
@@ -36,6 +43,7 @@ class SpeakerNode extends SceneObject {
     label = null,
     position = [0, .22, 0],
     direction = [0, 0, 1],
+    directionOrientation = null,
     directionLength = .72,
     color = [.95, .45, .12],
     activeColor = [1, .75, .2],
@@ -48,6 +56,7 @@ class SpeakerNode extends SceneObject {
     this.name = String(name ?? id);
     this.label = label == null ? null : String(label);
     this.direction = normalizedDirection(direction);
+    this.directionOrientation = directionOrientation == null ? null : normalizedOrientation(directionOrientation);
     this.directionLength = Number(directionLength);
     if (!Number.isFinite(this.directionLength) || this.directionLength <= 0) throw new Error('SpeakerNode directionLength must be positive');
     this.color = [...color];
@@ -65,7 +74,8 @@ class SpeakerNode extends SceneObject {
   setEnabled(value) { this.enabled = Boolean(value); this.emit('enabledChanged', { enabled: this.enabled }); return this; }
   setLabel(value) { this.label = value == null ? null : String(value); return this; }
   setDirection(value) { this.direction = normalizedDirection(value); return this; }
-  effectiveDirection() { return quaternionDirection(this.model?.orientation, this.direction); }
+  setDirectionOrientation(value) { this.directionOrientation = value == null ? null : normalizedOrientation(value); return this; }
+  effectiveDirection() { return quaternionDirection(this.directionOrientation ?? this.model?.orientation, this.direction); }
   effectiveLabel() { return this.label ?? this.model?.displayLabel ?? numericLabel(this.model?.name) ?? numericLabel(this.model?.id); }
 
   draw(renderer, context = {}) {
@@ -93,4 +103,4 @@ class SpeakerNode extends SceneObject {
   }
 }
 
-export { SpeakerNode, numericLabel, quaternionDirection };
+export { SpeakerNode, numericLabel, normalizedOrientation, quaternionDirection };
