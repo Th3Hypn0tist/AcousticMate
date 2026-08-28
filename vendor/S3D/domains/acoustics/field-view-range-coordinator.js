@@ -15,9 +15,15 @@ function fieldIdentity(field) {
   return id;
 }
 
+function fieldAnalysisSignature(field) {
+  if (typeof field?.analysisSignature === 'function') return String(field.analysisSignature());
+  return null;
+}
+
 function viewAnalysisSignature(view) {
   return JSON.stringify([
     fieldIdentity(view?.field),
+    fieldAnalysisSignature(view?.field),
     view?.frequency ?? null,
     view?.frequencyRange ?? null,
     view?.aggregation ?? null,
@@ -86,4 +92,4 @@ class FieldViewRangeCoordinator {
   }
 }
 
-export { FieldViewRangeCoordinator, fieldIdentity, validRange, viewAnalysisSignature };
+export { FieldViewRangeCoordinator, fieldAnalysisSignature, fieldIdentity, validRange, viewAnalysisSignature };
