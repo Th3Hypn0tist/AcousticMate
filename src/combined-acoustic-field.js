@@ -2,6 +2,8 @@ import { DirectSoundField } from './direct-sound-field.js';
 import { HybridAcousticField } from './hybrid-acoustic-field.js';
 import { RectangularRoomField } from './rectangular-room-field.js';
 
+const FIELD_COMPONENTS = new Set(['modal', 'hybrid', 'direct']);
+
 function uniqueSpeakers(speakers = [], speakerSets = []) {
   const values = [];
   const seen = new Set();
@@ -11,29 +13,43 @@ function uniqueSpeakers(speakers = [], speakerSets = []) {
   return values;
 }
 
+function sampleComponent(owner, component, x, y, z, frequencyHz, complex = false) {
+  if (!FIELD_COMPONENTS.has(component)) throw new Error(`Unknown acoustic field component: ${component}`);
+  const suffix = complex ? 'sampleComplexAtFrequency' : 'sampleAtFrequency';
+  if (component === 'modal') return owner.roomField[suffix](x, y, z, frequencyHz);
+  if (component === 'direct') return owner.directField[suffix](x, y, z, frequencyHz);
+  return owner.hybridField[suffix](x, y, z, frequencyHz);
+}
+
 class FrequencySliceField {
-  constructor({ owner, frequencyHz } = {}) {
+  constructor({ owner, frequencyHz, component = 'hybrid' } = {}) {
     this.owner = owner;
     this.frequency = Number(frequencyHz);
+    this.component = component;
     this.bounds = owner.domain.bounds;
     this.range = [0, Infinity];
   }
-  sample(x, y, z) { return this.owner.hybridField.sampleAtFrequency(x, y, z, this.frequency); }
-  sampleComplex(x, y, z) { return this.owner.hybridField.sampleComplexAtFrequency(x, y, z, this.frequency); }
+  setComponent(value) { if (!FIELD_COMPONENTS.has(value)) throw new Error(`Unknown acoustic field component: ${value}`); this.component = value; return this; }
+  sample(x, y, z) { return sampleComponent(this.owner, this.component, x, y, z, this.frequency, false); }
+  sampleComplex(x, y, z) { return sampleComponent(this.owner, this.component, x, y, z, this.frequency, true); }
   sampleComponents(x, y, z) { return this.owner.hybridField.sampleComponentsComplexAtFrequency(x, y, z, this.frequency); }
+  analysisSignature() { return `component:${this.component}`; }
 }
 
 class PhaseAwareFrequencyField {
-  constructor(owner) {
+  constructor(owner, { component = 'hybrid' } = {}) {
     this.owner = owner;
     this.bounds = owner.domain.bounds;
     this.range = [0, Infinity];
     this.frequency = null;
     this.frequencyRange = [...owner.frequencyRange];
+    this.setComponent(component);
   }
-  sample(x, y, z, frequencyHz) { return this.owner.hybridField.sampleAtFrequency(x, y, z, frequencyHz); }
-  sampleComplex(x, y, z, frequencyHz) { return this.owner.hybridField.sampleComplexAtFrequency(x, y, z, frequencyHz); }
+  setComponent(value) { if (!FIELD_COMPONENTS.has(value)) throw new Error(`Unknown acoustic field component: ${value}`); this.component = value; return this; }
+  sample(x, y, z, frequencyHz) { return sampleComponent(this.owner, this.component, x, y, z, frequencyHz, false); }
+  sampleComplex(x, y, z, frequencyHz) { return sampleComponent(this.owner, this.component, x, y, z, frequencyHz, true); }
   sampleComponents(x, y, z, frequencyHz) { return this.owner.hybridField.sampleComponentsComplexAtFrequency(x, y, z, frequencyHz); }
+  analysisSignature() { return `component:${this.component}`; }
 }
 
 class CombinedAcousticField {
@@ -73,7 +89,7 @@ class CombinedAcousticField {
     this.frequencyField = new PhaseAwareFrequencyField(this);
   }
 
-  fieldAtFrequency(frequencyHz) { return new FrequencySliceField({ owner: this, frequencyHz }); }
+  fieldAtFrequency(frequencyHz, { component = this.frequencyField.component } = {}) { return new FrequencySliceField({ owner: this, frequencyHz, component }); }
   invalidate() {
     this.roomField.invalidate();
     this.directField.invalidate();
@@ -122,4 +138,4 @@ class CombinedAcousticField {
   }
 }
 
-export { CombinedAcousticField, FrequencySliceField, PhaseAwareFrequencyField, uniqueSpeakers };
+export { CombinedAcousticField, FIELD_COMPONENTS, FrequencySliceField, PhaseAwareFrequencyField, sampleComponent, uniqueSpeakers };
