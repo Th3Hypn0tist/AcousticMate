@@ -141,6 +141,7 @@ class RectangularRoom {
     if (!object?.id || !object.geometry) throw new Error('Acoustic object requires id and geometry');
     if (this.acousticObjects.some(item => item.id === object.id)) throw new Error(`Acoustic object already exists: ${object.id}`);
     this.validateAcousticObject(object);
+    object.room = this;
     this.acousticObjects.push(object);
     this.emit('acousticObjectAdded', { object });
     return object;
@@ -163,6 +164,7 @@ class RectangularRoom {
     const index = this.acousticObjects.findIndex(item => item === objectOrId || item.id === objectOrId);
     if (index < 0) return null;
     const [object] = this.acousticObjects.splice(index, 1);
+    if (object.room === this) object.room = null;
     this.emit('acousticObjectRemoved', { object });
     return object;
   }
