@@ -336,7 +336,7 @@ function sliceCountControl(label, axis, value = 1) {
 }
 function sliceOpacityControl(label, axis, value = .18) {
   const output = gui.h('output', { text: `${Math.round(value * 100)}%` });
-  const input = gui.input({ type: 'range', min: 0, max: 1, step: .01, value, on: { input: event => { const next = Number(event.target.value); output.textContent = `${Math.round(next * 100)}%`; field3DView.setAxisOpacity(axis, next); } } });
+  const input = gui.input({ type: 'range', min: .01, max: .2, step: .01, value, on: { input: event => { const next = Number(event.target.value); output.textContent = `${Math.round(next * 100)}%`; field3DView.setAxisOpacity(axis, next); } } });
   return gui.field(label, gui.stack([input, output]), { className: 'slice-control opacity-control' });
 }
 const sliceControls = gui.h('details', { className: 'slice-controls' }, [
