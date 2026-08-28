@@ -26,6 +26,8 @@
     await import('./src/main.js?v=0.9.9');
     const { installSliceControls } = await import('./src/slice-controls-ui.js?v=0.9.9');
     installSliceControls();
+    const { installFieldComponentControls } = await import('./src/field-component-ui.js?v=0.9.9');
+    installFieldComponentControls();
     const { installGizmoRuntime } = await import('./src/gizmo-runtime.js?v=0.9.9');
     installGizmoRuntime();
   </script>
