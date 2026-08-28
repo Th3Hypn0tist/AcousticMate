@@ -39,8 +39,8 @@ function treatmentCandidate(geometry) {
     else geometry.setPosition(position);
     return geometry;
   };
-  geometry.gizmoGetRotation = () => [...(geometry.rotation ?? [0, 0, 0])];
-  geometry.gizmoSetRotation = rotation => geometry.setRotation(rotation);
+  geometry.gizmoGetRotation = () => [...(object.metadata?.presentationRotation ?? geometry.rotation ?? [0, 0, 0])];
+  geometry.gizmoSetRotation = rotation => object.setPresentationRotation(rotation);
   return geometry;
 }
 
@@ -90,7 +90,6 @@ function installGizmoRuntime(root = document) {
     for (const candidate of manipulationCandidates(viewport.scene, root)) candidate.draggable = false;
   };
   disableDirectDragging();
-  // Capture phase runs before the legacy PlaneDragController bubble listener, including for objects created later.
   canvas.addEventListener('pointerdown', disableDirectDragging, true);
 
   const controller = new TransformGizmoController(canvas, viewport.camera, viewport.scene, {
