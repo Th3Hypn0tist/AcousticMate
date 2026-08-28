@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { Box } from '../vendor/S3D/s3d.js';
 import { AcousticMaterialProfile, AcousticObject } from '../src/acoustic-object.js';
 import { RectangularRoom } from '../src/room.js';
+import { RoomEditor } from '../src/room-editor.js';
 import { RectangularRoomField, acousticObjectInverseQ } from '../src/rectangular-room-field.js';
 
 test('AcousticObject accepts S3D primitive geometry and interpolates absorption', () => {
@@ -25,6 +26,14 @@ test('bass-trap acoustic identity is independent of primitive shape', () => {
   assert.equal(boxTrap.type, 'bass-trap');
   assert.equal(boxTrap.geometry.primitive, 'box');
   assert.equal(boxTrap.geometry.acousticObject, boxTrap);
+});
+
+test('RoomEditor primitive creation never infers shape from acoustic type', () => {
+  const boxTrap = RoomEditor.prototype.createAcousticGeometry.call({}, 'bass-trap', 'box', 'box-trap');
+  const cylindricalAbsorber = RoomEditor.prototype.createAcousticGeometry.call({}, 'absorber', 'cylinder', 'cylindrical-absorber');
+  assert.equal(boxTrap.primitive, 'box');
+  assert.equal(cylindricalAbsorber.primitive, 'cylinder');
+  assert.throws(() => RoomEditor.prototype.createAcousticGeometry.call({}, 'absorber', 'plane', 'invalid'));
 });
 
 test('RectangularRoom validates attached acoustic object patches and binds object to room', () => {
