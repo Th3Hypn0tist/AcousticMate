@@ -13,6 +13,8 @@
   "geometryRules": [
     "AcousticMate does not define a parallel primitive type system",
     "the geometry of an AcousticObject is an instantiated S3D Primitive",
+    "the semantic acoustic object type and the S3D primitive type are independent",
+    "a bass trap may use Box, Cylinder or another suitable S3D primitive without changing its bass-trap acoustic identity",
     "any S3D primitive supported by the renderer may be used",
     "new reusable primitive implementations belong in S3D/core, not AcousticMate",
     "physical acoustic-treatment objects have finite volume and thickness",
@@ -46,6 +48,8 @@
   "attachmentRules": [
     "an AcousticObject may exist free-standing or attached to a room surface",
     "when attached, its wall-facing/contact relation may generate or bind a BoundaryPatch for solver use",
+    "gizmo position changes for a wall-attached AcousticObject update its surface offset and sill height rather than silently detaching it from the wall",
+    "primitive rotation is presentation geometry unless a solver strategy explicitly declares orientation-dependent boundary physics",
     "render geometry and acoustic boundary behavior are separate concerns",
     "the solver must consume acoustic models/boundary patches rather than infer treatment physics from primitive names"
   ],
@@ -57,6 +61,7 @@
   ],
   "applicationRules": [
     "RoomEditor may create, place, move, rotate, resize and remove AcousticObject instances",
+    "global transform gizmo enable applies to acoustic treatment objects as well as speaker objects",
     "AcousticMate may provide reusable material/acoustic profiles without fabricating measured manufacturer data",
     "AcousticMate must not automatically recommend absorber or diffuser placement unless a separate explicit feature contract later allows it"
   ]
