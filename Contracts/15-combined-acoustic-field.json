@@ -16,6 +16,11 @@
     "directField": "phase-aware directional direct sound field",
     "hybridField": "modal/direct hybrid field"
   },
+  "fieldComponents": {
+    "modal": "room-mode field including supported boundary loss and room coupling",
+    "hybrid": "frequency-dependent modal/direct visualization field",
+    "direct": "free-field directional direct-sound component"
+  },
   "summation": "complex",
   "rules": [
     "speaker contributions are summed as complex pressure, not dB magnitudes",
@@ -28,7 +33,9 @@
     "the visualization field crossfades between modal room field and directional direct field instead of summing two total-field approximations and double-counting the direct path",
     "modal Green-function scaling and free-field direct propagation use compatible 1/m field dimensions before hybrid weighting",
     "hybrid transition is explicit and frequency dependent; high-frequency visualization must not require extending the modal eigenbasis to the full UI navigation range",
-    "frequency-range visualization must be derived from the same underlying phase-aware hybrid field",
+    "frequency-range visualization must be derived from the same underlying phase-aware field component",
+    "the visualization may explicitly select modal, hybrid or direct field components without changing speaker, room or treatment domain state",
+    "attached absorptive treatment affects the supported modal boundary-loss model and must not be fabricated as attenuation of the unobstructed direct path",
     "speaker position or orientation changes invalidate affected coupling and field samples immediately",
     "SpeakerSet parent or member transform changes invalidate affected coupling and field samples immediately",
     "interactive visualization recomputes at most once per animation frame and does not wait for drag end",
