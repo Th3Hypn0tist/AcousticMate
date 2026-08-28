@@ -23,9 +23,11 @@
 <body>
   <main id="app"></main>
   <script type="module">
-    await import('./src/main.js?v=0.9.8');
-    const { installSliceControls } = await import('./src/slice-controls-ui.js?v=0.9.8');
+    await import('./src/main.js?v=0.9.9');
+    const { installSliceControls } = await import('./src/slice-controls-ui.js?v=0.9.9');
     installSliceControls();
+    const { installGizmoRuntime } = await import('./src/gizmo-runtime.js?v=0.9.9');
+    installGizmoRuntime();
   </script>
 </body>
 </html>
