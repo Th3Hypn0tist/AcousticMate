@@ -61,12 +61,13 @@ class FieldViewRangeCoordinator {
       this.activeSignature = activeSignature;
       this.rangeDirty = true;
     }
+    const analysisSignature = active.map(viewAnalysisSignature).join('|');
+    if (this.hasRange && analysisSignature !== this.analysisSignature) this.rangeDirty = true;
     if (!this.rangeDirty) return this;
 
     const ranges = active.map(view => view.sampleRange).filter(validRange);
     if (!ranges.length) return this;
     const next = [Math.min(...ranges.map(range => range[0])), Math.max(...ranges.map(range => range[1]))];
-    const analysisSignature = active.map(viewAnalysisSignature).join('|');
     const sameAnalysis = this.hasRange && analysisSignature === this.analysisSignature;
     this.range = sameAnalysis
       ? [Math.min(this.range[0], next[0]), Math.max(this.range[1], next[1])]
