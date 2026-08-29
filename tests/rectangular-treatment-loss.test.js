@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { CombinedAcousticField } from '../src/combined-acoustic-field.js';
 import { acousticObjectInverseQ, RectangularRoomField } from '../src/rectangular-room-field.js';
 import { RoomEditor } from '../src/room-editor.js';
 
@@ -12,6 +13,15 @@ function attachedObject({ acousticModel = 'absorptive', offset = 0, width = .4, 
     attachment: { wall: 'z-min', offset, width, height: dimensions.height, sillHeight: 0 },
     absorptionAt: () => acousticModel === 'absorptive' ? coefficient : 0,
     normalizedConductanceAt: () => acousticModel === 'impedance' ? coefficient : 0,
+  };
+}
+
+function domain(acousticObjects = []) {
+  return {
+    dimensions: { ...dimensions },
+    bounds: { min: [0, 0, 0], max: [dimensions.width, dimensions.height, dimensions.depth] },
+    acousticObjects,
+    openings: () => [],
   };
 }
 
@@ -54,6 +64,15 @@ test('free-standing treatment remains zero rectangular boundary loss', () => {
     normalizedConductanceAt: () => 1,
   };
   assert.equal(acousticObjectInverseQ(mode, [freeStanding], dimensions), 0);
+});
+
+test('wall treatment does not attenuate the direct field', () => {
+  const speaker = { position: [1, 1, 1], enabled: true, transferAt: () => [1, 0] };
+  const combined = new CombinedAcousticField({ domain: domain(), modes: [mode], speakers: [speaker], frequencyRange: [20, 100] });
+  const before = combined.directField.sampleComplexAtFrequency(2, 1, 1, 80);
+  combined.setDomain(domain([attachedObject({ acousticModel: 'impedance', coefficient: 1 })]));
+  const after = combined.directField.sampleComplexAtFrequency(2, 1, 1, 80);
+  assert.deepEqual(after, before);
 });
 
 test('RoomEditor creates bass traps as explicit idealized impedance objects', () => {
