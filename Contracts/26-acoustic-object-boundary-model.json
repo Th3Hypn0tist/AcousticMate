@@ -48,7 +48,10 @@
   "attachmentRules": [
     "an AcousticObject may exist free-standing or attached to a room surface",
     "when attached, its wall-facing/contact relation may generate or bind a BoundaryPatch for solver use",
-    "gizmo position changes for a wall-attached AcousticObject update its surface offset and sill height rather than silently detaching it from the wall",
+    "RoomEditor presents AcousticObject placement as world-space X, Y and Z center coordinates rather than exposing wall, offset or sill-height as primary placement controls",
+    "wall, offset and sill-height may remain an internal solver-facing representation of a RoomSurfaceAttachment",
+    "editing world-space X, Y or Z for a wall-attached AcousticObject updates or resolves the corresponding surface attachment without silently detaching the object",
+    "gizmo position changes for a wall-attached AcousticObject follow the same world-space placement rule as numeric X, Y and Z editing",
     "primitive rotation is presentation geometry unless a solver strategy explicitly declares orientation-dependent boundary physics",
     "render geometry and acoustic boundary behavior are separate concerns",
     "the solver must consume acoustic models/boundary patches rather than infer treatment physics from primitive names"
