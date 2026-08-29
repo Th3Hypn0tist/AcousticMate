@@ -1,0 +1,48 @@
+{
+  "module": "RectangularTreatmentLoss",
+  "scope": "AcousticMate",
+  "instantiable": false,
+  "purpose": "define how attached acoustic boundary models contribute mode-dependent damping in the current rectangular analytical solver without inferring physics from semantic treatment type",
+  "inputs": {
+    "mode": "RoomMode",
+    "roomDimensions": "RectangularRoom dimensions",
+    "attachment": "RoomSurfaceAttachment",
+    "acousticModel": "absorptive | impedance | rigid | scattering",
+    "materialProfile": "AcousticMaterialProfile"
+  },
+  "materialProfileExtension": {
+    "normalizedConductance": "frequency-dependent points [Hz,value] with value in 0..1",
+    "definition": "dimensionless dissipative part of normalized surface admittance, Re(rho*c/Zs), used only by the current impedance damping approximation",
+    "method": "normalizedConductanceAt(frequencyHz) -> 0..1"
+  },
+  "lossRules": [
+    "only an AcousticObject with a RoomSurfaceAttachment may contribute rectangular-room boundary loss",
+    "rigid and scattering models contribute zero damping in this solver",
+    "absorptive model loss uses the existing absorption-coefficient approximation",
+    "impedance model loss uses normalized surface conductance directly",
+    "semantic object type such as absorber, diffuser or bass-trap must never select a solver formula",
+    "free-standing treatment contributes zero room-boundary loss in the current rectangular solver",
+    "wall treatment changes modal damping only and must not attenuate unobstructed direct sound"
+  ],
+  "modalWeight": {
+    "effectiveBoundaryArea": "integral approximation of attachment area weighted by squared modal pressure and rectangular modal normalization",
+    "absorptiveWeight": "absorptionAt(mode.frequency) / 4",
+    "impedanceWeight": "normalizedConductanceAt(mode.frequency)",
+    "inverseQ": "speedOfSound * effectiveBoundaryArea * modelWeight / (omegaMode * roomVolume)"
+  },
+  "impedanceApproximationLimits": [
+    "the current solver consumes only the dissipative real conductance term",
+    "reactive surface susceptance and impedance-driven modal-frequency shift are not yet solved",
+    "this is a perturbative modal-damping approximation, not an exact mixed-impedance eigenmode solution",
+    "normalizedConductance values must be explicit profile data; they must not be synthesized from the semantic object type inside the solver",
+    "generic idealized profiles are allowed only when clearly identified as idealized rather than measured manufacturer data"
+  ],
+  "regressions": [
+    "an attached absorptive treatment reduces response at a modal antinode",
+    "the same treatment produces less damping where the covered boundary patch is weak for that mode",
+    "an attached impedance treatment with non-zero normalized conductance increases modal inverse-Q",
+    "free-standing treatment produces zero rectangular boundary loss",
+    "scattering treatment does not fake damping",
+    "direct field is unchanged by wall treatment"
+  ]
+}
