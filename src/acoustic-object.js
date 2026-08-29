@@ -37,12 +37,14 @@ function interpolate(points, frequencyHz, fallback = 0) {
 }
 
 class AcousticMaterialProfile {
-  constructor({ absorption = [], scattering = [] } = {}) {
+  constructor({ absorption = [], scattering = [], normalizedConductance = [] } = {}) {
     this.absorption = profilePoints(absorption, 'Absorption profile');
     this.scattering = profilePoints(scattering, 'Scattering profile');
+    this.normalizedConductance = profilePoints(normalizedConductance, 'Normalized conductance profile');
   }
   absorptionAt(frequencyHz) { return interpolate(this.absorption, frequencyHz, 0); }
   scatteringAt(frequencyHz) { return interpolate(this.scattering, frequencyHz, 0); }
+  normalizedConductanceAt(frequencyHz) { return interpolate(this.normalizedConductance, frequencyHz, 0); }
 }
 
 class AcousticObject {
@@ -93,6 +95,7 @@ class AcousticObject {
   }
   absorptionAt(frequencyHz) { return this.acousticModel === 'absorptive' || this.acousticModel === 'impedance' ? this.materialProfile.absorptionAt(frequencyHz) : 0; }
   scatteringAt(frequencyHz) { return this.acousticModel === 'scattering' ? this.materialProfile.scatteringAt(frequencyHz) : 0; }
+  normalizedConductanceAt(frequencyHz) { return this.acousticModel === 'impedance' ? this.materialProfile.normalizedConductanceAt(frequencyHz) : 0; }
 }
 
 export { AcousticObject, AcousticMaterialProfile, BOUNDARY_MODELS, OBJECT_TYPES, rotation3 };
