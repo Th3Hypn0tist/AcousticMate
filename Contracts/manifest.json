@@ -29,6 +29,7 @@
     "24-speaker-set-editor.json",
     "25-room-editor.json",
     "26-acoustic-object-boundary-model.json",
+    "27-rectangular-treatment-loss.json",
     "README.md",
     "manifest.json"
   ],
