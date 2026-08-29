@@ -94,14 +94,22 @@ function acousticObjectInverseQ(mode, acousticObjects, dimensions, speedOfSound 
   if (!acousticObjects?.length || mode.frequency <= 0) return 0;
   const volume = dimensions.width * dimensions.height * dimensions.depth;
   const omegaMode = 2 * Math.PI * mode.frequency;
-  let effectiveArea = 0;
+  let inverseQ = 0;
   for (const object of acousticObjects) {
     if (!object?.attachment) continue;
-    const absorption = typeof object.absorptionAt === 'function' ? object.absorptionAt(mode.frequency) : 0;
-    if (absorption <= 0) continue;
-    effectiveArea += boundaryModeEffectiveArea(mode, object.attachment, dimensions, absorption);
+    const modalArea = boundaryModeEffectiveArea(mode, object.attachment, dimensions);
+    if (modalArea <= 0) continue;
+    if (object.acousticModel === 'absorptive') {
+      const absorption = typeof object.absorptionAt === 'function' ? object.absorptionAt(mode.frequency) : 0;
+      if (absorption > 0) inverseQ += speedOfSound * modalArea * absorption / (4 * omegaMode * volume);
+      continue;
+    }
+    if (object.acousticModel === 'impedance') {
+      const conductance = typeof object.normalizedConductanceAt === 'function' ? object.normalizedConductanceAt(mode.frequency) : 0;
+      if (conductance > 0) inverseQ += speedOfSound * modalArea * conductance / (omegaMode * volume);
+    }
   }
-  return speedOfSound * effectiveArea / (4 * omegaMode * volume);
+  return inverseQ;
 }
 
 class RectangularRoomField {
