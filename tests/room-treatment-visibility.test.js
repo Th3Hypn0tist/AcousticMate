@@ -78,3 +78,32 @@ test('RoomEditor transaction restores free-standing treatment transform and pres
   assert.deepEqual(geometry.scale, [.4, .3, .2]);
   assert.deepEqual(geometry.rotation, [0, 0, 0]);
 });
+
+test('attached treatment XYZ resolves the nearest room wall without exposing wall selection', () => {
+  const room = new RectangularRoom({ width: 6, height: 2.7, depth: 4.5 });
+  const object = treatment('absorber-xyz', 'absorber', new Box({ id: 'absorber-xyz-geometry' }), 1);
+  room.addAcousticObject(object);
+  const editor = makeEditor(room);
+
+  const attachment = editor.attachmentFromWorldPosition(object, [5.95, 1.35, 2.25]);
+
+  assert.equal(attachment.wall, 'x-max');
+  assert.equal(attachment.offset, 2);
+  assert.equal(attachment.sillHeight, .85);
+});
+
+test('attached treatment XYZ update changes solver attachment and snaps presentation geometry to that surface', () => {
+  const room = new RectangularRoom({ width: 6, height: 2.7, depth: 4.5 });
+  const object = treatment('absorber-move', 'absorber', new Box({ id: 'absorber-move-geometry' }), 1);
+  room.addAcousticObject(object);
+  const editor = makeEditor(room);
+
+  editor.updateAttachedObjectPosition(object, 0, 5.95);
+  editor.updateAttachedObjectPosition(object, 2, 2.25);
+  editor.updateAttachedObjectPosition(object, 1, 1.35);
+
+  assert.equal(object.attachment.wall, 'x-max');
+  assert.equal(object.attachment.offset, 2);
+  assert.equal(object.attachment.sillHeight, .85);
+  assert.deepEqual(object.geometry.position, [5.95, 1.35, 2.25]);
+});
