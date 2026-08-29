@@ -288,6 +288,45 @@ class RoomEditor {
     else if (object.attachment.wall.startsWith('x-')) object.geometry.scale = [thickness / 2, object.attachment.height / 2, object.attachment.width / 2];
     else object.geometry.scale = [object.attachment.width / 2, object.attachment.height / 2, thickness / 2];
   }
+  attachmentFromWorldPosition(object, position = object.geometry.position) {
+    const attachment = object?.attachment;
+    if (!attachment) return null;
+    const { width: roomWidth, height: roomHeight, depth: roomDepth } = this.room.dimensions;
+    const thickness = Math.max(.02, Number(object.metadata?.thickness ?? .1));
+    const halfThickness = thickness / 2;
+    const x = Number(position[0]);
+    const y = Number(position[1]);
+    const z = Number(position[2]);
+    if (![x, y, z].every(Number.isFinite)) throw new Error('Acoustic object position must contain finite X, Y and Z values');
+    const candidates = [
+      { wall: 'x-min', distance: Math.abs(x - halfThickness), coordinate: z, span: roomDepth },
+      { wall: 'x-max', distance: Math.abs(x - (roomWidth - halfThickness)), coordinate: z, span: roomDepth },
+      { wall: 'z-min', distance: Math.abs(z - halfThickness), coordinate: x, span: roomWidth },
+      { wall: 'z-max', distance: Math.abs(z - (roomDepth - halfThickness)), coordinate: x, span: roomWidth },
+    ];
+    candidates.sort((a, b) => {
+      const distance = a.distance - b.distance;
+      if (Math.abs(distance) > 1e-9) return distance;
+      if (a.wall === attachment.wall) return -1;
+      if (b.wall === attachment.wall) return 1;
+      return 0;
+    });
+    const nearest = candidates[0];
+    const maxOffset = Math.max(0, nearest.span - attachment.width);
+    const maxSillHeight = Math.max(0, roomHeight - attachment.height);
+    return {
+      ...attachment,
+      wall: nearest.wall,
+      offset: clamp(nearest.coordinate - attachment.width / 2, 0, maxOffset),
+      sillHeight: clamp(y - attachment.height / 2, 0, maxSillHeight),
+    };
+  }
+  updateAttachedObjectPosition(object, axis, value) {
+    const position = [...object.geometry.position];
+    position[axis] = value;
+    const attachment = this.attachmentFromWorldPosition(object, position);
+    return this.room.updateAcousticObject(object, { attachment });
+  }
   applyAcousticObjects() { for (const object of this.room.acousticObjects ?? []) { if (!object.geometry.scene) this.scene.add(object.geometry); this.positionAcousticObject(object); } this.roomField.setAcousticObjects(this.room.acousticObjects ?? []); this.onChanged?.(this.room); if (this.visible) this.render(); }
 
   numberField(label, value, { min = -1e6, max = 1e6, step = .01, update } = {}) {
@@ -314,8 +353,7 @@ class RoomEditor {
       controls.push(this.gui.field('Vertex', target, { className: 'compact-field' }));
     } else if (anchor.type === 'edge') {
       const target = this.gui.select({ value: anchor.target, on: { change: event => { const anchors = measurement.anchors.map(cloneAnchor); anchors[anchorIndex] = { type: 'edge', target: event.target.value, t: anchor.t ?? .5 }; workflow.setMeasurementAnchors(measurement.id, anchors, { preserveValue: measurement.source === 'measured' }); this.render(); } } }, workflow.polygonEditor.edges().map(edge => this.gui.option(edge.id, edge.id)));
-      controls.push(this.gui.field('Edge', target, { className: 'compact-field' }));
-      controls.push(this.numberField('Edge position t', anchor.t ?? .5, { min: 0, max: 1, step: .01, update: value => { const anchors = measurement.anchors.map(cloneAnchor); anchors[anchorIndex] = { ...anchor, t: value }; workflow.setMeasurementAnchors(measurement.id, anchors, { preserveValue: measurement.source === 'measured' }); } }));
+      controls.push(this.gui.field('Edge position t', anchor.t ?? .5, { min: 0, max: 1, step: .01, update: value => { const anchors = measurement.anchors.map(cloneAnchor); anchors[anchorIndex] = { ...anchor, t: value }; workflow.setMeasurementAnchors(measurement.id, anchors, { preserveValue: measurement.source === 'measured' }); } }));
     } else {
       controls.push(this.numberField('Free X', anchor.position?.[0] ?? 0, { update: value => { const anchors = measurement.anchors.map(cloneAnchor); anchors[anchorIndex] = { type: 'free', position: [value, anchor.position?.[1] ?? 0] }; workflow.setMeasurementAnchors(measurement.id, anchors, { preserveValue: measurement.source === 'measured' }); } }));
       controls.push(this.numberField('Free Z', anchor.position?.[1] ?? 0, { update: value => { const anchors = measurement.anchors.map(cloneAnchor); anchors[anchorIndex] = { type: 'free', position: [anchor.position?.[0] ?? 0, value] }; workflow.setMeasurementAnchors(measurement.id, anchors, { preserveValue: measurement.source === 'measured' }); } }));
@@ -430,8 +468,8 @@ class RoomEditor {
       ]);
     }
     const attachment = object.attachment;
-    const wall = this.gui.select({ value: attachment.wall, on: { change: event => { const nextWall = event.target.value; const maxOffset = Math.max(0, this.room.wallSpan(nextWall) - attachment.width); this.room.updateAcousticObject(object, { attachment: { ...object.attachment, wall: nextWall, offset: clamp(attachment.offset, 0, maxOffset) } }); } } }, WALL_OPTIONS.map(([value, text]) => this.gui.option(value, text)));
     const updateAttachment = key => value => this.room.updateAcousticObject(object, { attachment: { ...object.attachment, [key]: value } });
+    const updatePosition = axis => value => this.updateAttachedObjectPosition(object, axis, value);
     const modelHint = object.type === 'diffuser'
       ? 'Current modal solver represents this scattering boundary but does not claim exact diffuser scattering.'
       : isImpedance
@@ -439,9 +477,8 @@ class RoomEditor {
         : 'Absorption contributes mode-dependent boundary loss at the attached wall area.';
     return this.gui.h('section', { className: 'speaker-card treatment-card' }, [
       ...common,
-      this.gui.field('Wall', wall, { className: 'compact-field' }),
-      this.gui.h('div', { className: 'position-grid' }, [this.numberField('Offset (m)', attachment.offset, { min: 0, max: 100, update: updateAttachment('offset') }), this.numberField('Width (m)', attachment.width, { min: .05, max: 20, update: updateAttachment('width') }), this.numberField('Height (m)', attachment.height, { min: .05, max: 20, update: updateAttachment('height') })]),
-      this.numberField('Bottom (m)', attachment.sillHeight, { min: 0, max: 20, update: updateAttachment('sillHeight') }),
+      this.gui.h('div', { className: 'position-grid' }, [0, 1, 2].map(axis => this.numberField(['X (m)', 'Y (m)', 'Z (m)'][axis], object.geometry.position[axis], { update: updatePosition(axis) }))),
+      this.gui.h('div', { className: 'position-grid' }, [this.numberField('Width (m)', attachment.width, { min: .05, max: 20, update: updateAttachment('width') }), this.numberField('Height (m)', attachment.height, { min: .05, max: 20, update: updateAttachment('height') })]),
       this.numberField('Thickness (m)', Number(object.metadata.thickness ?? .1), { min: .02, max: 5, update: value => { object.metadata.thickness = value; this.applyAcousticObjects(); } }),
       this.numberField(coefficientLabel, coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }),
       this.gui.h('p', { className: 'hint', text: modelHint }),
