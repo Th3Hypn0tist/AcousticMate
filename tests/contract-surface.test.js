@@ -98,9 +98,11 @@ test('AcousticMate V1 model contracts are instantiable through public APIs', () 
   const combined = new CombinedAcousticField({ domain, modes, speakerSets: [set], frequencyRange: [20, 100], crossoverNetwork: crossover });
   hasMethods(combined, ['fieldAtFrequency', 'invalidate', 'setFrequencyRange', 'setSpeakers', 'setDomain']);
 
-  const material = new AcousticMaterialProfile({ absorption: [[20, .5], [20000, .5]] });
+  const material = new AcousticMaterialProfile({ absorption: [[20, .5], [20000, .5]], normalizedConductance: [[20, .2], [20000, .8]] });
+  hasMethods(material, ['absorptionAt', 'scatteringAt', 'normalizedConductanceAt']);
+  assert.ok(material.normalizedConductanceAt(1000) > .2);
   const object = new AcousticObject({ id: 'absorber', type: 'absorber', geometry: new Box({ id: 'absorber-box' }), acousticModel: 'absorptive', materialProfile: material });
-  hasMethods(object, ['setAttachment', 'setAcousticModel', 'setMaterialProfile', 'absorptionAt', 'scatteringAt']);
+  hasMethods(object, ['setAttachment', 'setAcousticModel', 'setMaterialProfile', 'absorptionAt', 'scatteringAt', 'normalizedConductanceAt']);
 });
 
 test('RoomEditor prototype exposes contract transaction operations', () => {
