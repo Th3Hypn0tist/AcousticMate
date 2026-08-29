@@ -365,7 +365,18 @@ class RoomEditor {
     return this.gui.h('section', { className: 'speaker-card room-opening-card' }, [this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('strong', { text: opening.id }), this.gui.button('Remove opening', { className: 'danger-button', on: { click: () => this.removeOpening(opening) } })]), this.gui.field('Wall', wall, { className: 'compact-field' }), this.gui.h('div', { className: 'position-grid' }, [this.numberField('Offset (m)', opening.offset, { min: 0, max: 100, update: value => this.updateOpening(opening, { offset: value }) }), this.numberField('Width (m)', opening.width, { min: .1, max: 20, update: value => this.updateOpening(opening, { width: value }) }), this.numberField('Height (m)', opening.height, { min: .1, max: 20, update: value => this.updateOpening(opening, { height: value }) })]), this.numberField('Sill height (m)', opening.sillHeight, { min: 0, max: 20, update: value => this.updateOpening(opening, { sillHeight: value }) }), this.numberField('Transmission', opening.transmission, { min: 0, max: 1, step: .01, update: value => this.updateOpening(opening, { transmission: value }) }), this.gui.h('p', { className: 'hint', text: 'Open boundary: energy crossing this aperture leaves the solved room. Exterior geometry is not calculated.' })]);
   }
 
-  treatmentProfile(type, coefficient = null) { if (type === 'diffuser') { const value = coefficient ?? .65; return new AcousticMaterialProfile({ scattering: [[20, value], [20000, value]] }); } const value = coefficient ?? (type === 'bass-trap' ? .55 : .75); return new AcousticMaterialProfile({ absorption: [[20, value], [20000, value]] }); }
+  treatmentProfile(type, coefficient = null) {
+    if (type === 'diffuser') {
+      const value = coefficient ?? .65;
+      return new AcousticMaterialProfile({ scattering: [[20, value], [20000, value]] });
+    }
+    if (type === 'bass-trap') {
+      const value = coefficient ?? .65;
+      return new AcousticMaterialProfile({ normalizedConductance: [[20, value], [20000, value]] });
+    }
+    const value = coefficient ?? .75;
+    return new AcousticMaterialProfile({ absorption: [[20, value], [20000, value]] });
+  }
   createAcousticGeometry(type, primitive, id) {
     const options = { id: `${id}-geometry`, color: TREATMENT_COLORS[type], selectable: false, visible: true };
     if (primitive === 'box') return new Box(options);
@@ -380,13 +391,18 @@ class RoomEditor {
     const offset = Math.max(0, (this.room.wallSpan(wall) - width) / 2);
     const id = `${type}-${++this.objectSequence}`;
     const geometry = this.createAcousticGeometry(type, primitive, id);
-    const object = new AcousticObject({ id, type, geometry, acousticModel: type === 'diffuser' ? 'scattering' : 'absorptive', materialProfile: this.treatmentProfile(type), attachment: { wall, offset, width, height, sillHeight }, metadata: { thickness: type === 'bass-trap' ? width : .1 } });
+    const acousticModel = type === 'diffuser' ? 'scattering' : type === 'bass-trap' ? 'impedance' : 'absorptive';
+    const metadata = { thickness: type === 'bass-trap' ? width : .1 };
+    if (type === 'bass-trap') metadata.acousticProfileSource = 'idealized-generic';
+    const object = new AcousticObject({ id, type, geometry, acousticModel, materialProfile: this.treatmentProfile(type), attachment: { wall, offset, width, height, sillHeight }, metadata });
     this.scene.add(geometry);
     try { return this.room.addAcousticObject(object); }
     catch (error) { this.scene.remove(geometry); throw error; }
   }
   acousticObjectCard(object) {
-    const coefficient = object.type === 'diffuser' ? object.scatteringAt(1000) : object.absorptionAt(125);
+    const isImpedance = object.acousticModel === 'impedance';
+    const coefficient = object.type === 'diffuser' ? object.scatteringAt(1000) : isImpedance ? object.normalizedConductanceAt(80) : object.absorptionAt(125);
+    const coefficientLabel = object.type === 'diffuser' ? 'Scattering' : isImpedance ? 'Normalized conductance' : 'Absorption';
     const common = [
       this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('strong', { text: object.id }), this.gui.button('Remove', { className: 'danger-button', on: { click: () => this.room.removeAcousticObject(object) } })]),
       this.gui.h('span', { className: 'model-name', text: `${object.type} · ${object.geometry.primitive} · ${object.acousticModel}` }),
@@ -409,21 +425,26 @@ class RoomEditor {
         this.gui.h('span', { className: 'coordinates', text: 'Free-standing · no room-surface boundary patch' }),
         this.gui.h('div', { className: 'position-grid' }, [0, 1, 2].map(axis => this.numberField(['X (m)', 'Y (m)', 'Z (m)'][axis], object.geometry.position[axis], { update: updatePosition(axis) }))),
         this.gui.h('div', { className: 'position-grid' }, [0, 1, 2].map(axis => this.numberField(['Scale X', 'Scale Y', 'Scale Z'][axis], object.geometry.scale[axis], { min: .001, max: 100, update: updateScale(axis) }))),
-        this.numberField(object.type === 'diffuser' ? 'Scattering' : 'Absorption', coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }),
+        this.numberField(coefficientLabel, coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }),
         this.gui.h('p', { className: 'hint', text: 'Free-standing geometry remains movable/rotatable, but the current rectangular modal solver does not convert it into wall-boundary loss without an attachment.' }),
       ]);
     }
     const attachment = object.attachment;
     const wall = this.gui.select({ value: attachment.wall, on: { change: event => { const nextWall = event.target.value; const maxOffset = Math.max(0, this.room.wallSpan(nextWall) - attachment.width); this.room.updateAcousticObject(object, { attachment: { ...object.attachment, wall: nextWall, offset: clamp(attachment.offset, 0, maxOffset) } }); } } }, WALL_OPTIONS.map(([value, text]) => this.gui.option(value, text)));
     const updateAttachment = key => value => this.room.updateAcousticObject(object, { attachment: { ...object.attachment, [key]: value } });
+    const modelHint = object.type === 'diffuser'
+      ? 'Current modal solver represents this scattering boundary but does not claim exact diffuser scattering.'
+      : isImpedance
+        ? 'Idealized impedance damping profile for placement studies; not measured manufacturer data. The current solver uses dissipative normalized conductance only and does not solve reactive modal-frequency shifts.'
+        : 'Absorption contributes mode-dependent boundary loss at the attached wall area.';
     return this.gui.h('section', { className: 'speaker-card treatment-card' }, [
       ...common,
       this.gui.field('Wall', wall, { className: 'compact-field' }),
       this.gui.h('div', { className: 'position-grid' }, [this.numberField('Offset (m)', attachment.offset, { min: 0, max: 100, update: updateAttachment('offset') }), this.numberField('Width (m)', attachment.width, { min: .05, max: 20, update: updateAttachment('width') }), this.numberField('Height (m)', attachment.height, { min: .05, max: 20, update: updateAttachment('height') })]),
       this.numberField('Bottom (m)', attachment.sillHeight, { min: 0, max: 20, update: updateAttachment('sillHeight') }),
       this.numberField('Thickness (m)', Number(object.metadata.thickness ?? .1), { min: .02, max: 5, update: value => { object.metadata.thickness = value; this.applyAcousticObjects(); } }),
-      this.numberField(object.type === 'diffuser' ? 'Scattering' : 'Absorption', coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }),
-      object.type === 'diffuser' ? this.gui.h('p', { className: 'hint', text: 'Current modal solver represents this scattering boundary but does not claim exact diffuser scattering.' }) : this.gui.h('p', { className: 'hint', text: 'Absorption contributes mode-dependent boundary loss at the attached wall area.' }),
+      this.numberField(coefficientLabel, coefficient, { min: 0, max: 1, step: .01, update: value => this.room.updateAcousticObject(object, { materialProfile: this.treatmentProfile(object.type, value) }) }),
+      this.gui.h('p', { className: 'hint', text: modelHint }),
     ]);
   }
 
@@ -447,7 +468,7 @@ class RoomEditor {
       this.dimensionControls(), this.geometryWorkflowControls(),
       this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('h2', { text: 'Openings' }), this.gui.button('Add opening', { on: { click: () => this.addOpening() } })]), this.gui.h('div', { className: 'member-list' }, this.room.openings.map(opening => this.openingCard(opening))),
       this.gui.h('h2', { text: 'Acoustic objects' }), this.acousticObjectCreateControls(), this.gui.h('div', { className: 'member-list' }, (this.room.acousticObjects ?? []).map(object => this.acousticObjectCard(object))),
-      this.gui.h('p', { className: 'hint', text: 'Openings and attached absorptive objects affect modal damping. Free-standing objects remain geometry-only for the current rectangular boundary-loss model. Diffusers remain explicit scattering objects; exact scattering is outside the current solver.' }),
+      this.gui.h('p', { className: 'hint', text: 'Openings and attached absorptive or impedance objects affect modal damping. Free-standing objects remain geometry-only for the current rectangular boundary-loss model. Diffusers remain explicit scattering objects; exact scattering is outside the current solver.' }),
     ]);
   }
 
