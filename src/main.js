@@ -1,4 +1,4 @@
-import { Scene, Box, PerspectiveCamera, Viewport, OrbitControls, PlaneDragController } from '../vendor/S3D/s3d.js';
+import { Scene, Box, PerspectiveCamera, Viewport, OrbitControls, TransformGizmoController } from '../vendor/S3D/s3d.js';
 import { FieldViewRangeCoordinator, FrequencyRangeController, OrthogonalFieldSlices, SampledFieldPlane, SpeakerNode } from '../vendor/S3D/domains/acoustics/index.js';
 import { WebGUI } from '../vendor/WebGUI/webgui.js';
 import { AcousticRuntime } from './acoustic-runtime.js';
@@ -44,6 +44,8 @@ const scene = new Scene();
 const speakerLibrary = new SpeakerLibrary();
 const crossoverNetwork = new CrossoverNetwork();
 const editorState = { set: null, setHelperState: null, room: false, camera: null };
+let roomEditor = null;
+let gizmosEnabled = true;
 
 async function loadSpeakerLibrary() {
   const manifestUrl = new URL('../speaker-library/manifest.json', import.meta.url);
@@ -174,18 +176,87 @@ const camera = new PerspectiveCamera({
 const viewport = new Viewport(canvas, { camera }).start(scene);
 const orbit = new OrbitControls(canvas, camera);
 
+function gizmoRotationFromOrientation(orientation) {
+  const { yaw, pitch, roll } = eulerDegreesFromQuaternion(orientation);
+  const radians = value => value * Math.PI / 180;
+  return [radians(pitch), radians(yaw), radians(roll)];
+}
+
+function orientationFromGizmoRotation(rotation) {
+  const degrees = value => value * 180 / Math.PI;
+  return quaternionFromEulerDegrees({
+    pitch: degrees(rotation[0]),
+    yaw: degrees(rotation[1]),
+    roll: degrees(rotation[2]),
+  });
+}
+
+function boundedMainPosition(value) {
+  const position = [...value];
+  position[1] = Math.max(.22, Math.min(dimensions.height - .22, position[1]));
+  return position;
+}
+
 function manipulationCandidates() {
-  if (editorState.room) return [];
+  if (editorState.room) return roomEditor?.acousticObjectGizmoCandidates?.() ?? [];
   if (editorState.set) return editorState.set.members.map(member => member.speaker.node);
   return [...speakerNodes.filter(node => !node.model?.parentSet), ...setNodes];
 }
 
-const drag = new PlaneDragController(canvas, camera, {
+const transformGizmo = new TransformGizmoController(canvas, camera, scene, {
   candidates: manipulationCandidates,
-  planeY: .22,
-  minY: () => editorState.set ? -10 : .22,
-  maxY: () => editorState.set ? 10 : dimensions.height - .22,
+  enabled: gizmosEnabled,
+  mode: 'position',
+  vertical: true,
 });
+
+room.on('acousticObjectRemoved', event => {
+  if (transformGizmo.selected === event.object?.geometry) transformGizmo.select(null);
+});
+
+function wireSpeakerNodeGizmo(speaker, node) {
+  node.selectable = true;
+  node.gizmoEnabled = true;
+  node.gizmoPickRadius = node.dragRadius ?? .42;
+  node.gizmoGetPosition = () => {
+    const editedSet = editorState.set;
+    if (editedSet && speaker.parentSet === editedSet) return [...editedSet.memberForSpeaker(speaker).localPosition];
+    return [...speaker.position];
+  };
+  node.gizmoSetPosition = value => {
+    const editedSet = editorState.set;
+    if (editedSet && speaker.parentSet === editedSet) {
+      const position = [...value];
+      position[1] = Math.max(-10, Math.min(10, position[1]));
+      editedSet.setMemberPosition(speaker, position);
+    } else if (!speaker.parentSet && !editorState.room) speaker.setPosition(boundedMainPosition(value));
+    return node;
+  };
+  node.gizmoGetRotation = () => {
+    const editedSet = editorState.set;
+    const orientation = editedSet && speaker.parentSet === editedSet
+      ? editedSet.memberForSpeaker(speaker).localOrientation
+      : speaker.orientation;
+    return gizmoRotationFromOrientation(orientation);
+  };
+  node.gizmoSetRotation = value => {
+    const orientation = orientationFromGizmoRotation(value);
+    const editedSet = editorState.set;
+    if (editedSet && speaker.parentSet === editedSet) editedSet.setMemberOrientation(speaker, orientation);
+    else if (!speaker.parentSet && !editorState.room) speaker.setOrientation(orientation);
+    return node;
+  };
+}
+
+function wireSpeakerSetGizmo(set, node) {
+  node.selectable = true;
+  node.gizmoEnabled = true;
+  node.gizmoPickRadius = node.dragRadius ?? .46;
+  node.gizmoGetPosition = () => [...set.position];
+  node.gizmoSetPosition = value => { if (!editorState.set && !editorState.room) set.setPosition(boundedMainPosition(value)); return node; };
+  node.gizmoGetRotation = () => gizmoRotationFromOrientation(set.orientation);
+  node.gizmoSetRotation = value => { if (!editorState.set && !editorState.room) set.setOrientation(orientationFromGizmoRotation(value)); return node; };
+}
 
 function numberControl(label, value, { min, max, step = .1, update, invalidate = true } = {}) {
   const input = gui.input({
@@ -347,6 +418,8 @@ const sliceControls = gui.h('details', { className: 'slice-controls' }, [
   sliceCountControl('Z slices', 'z', 1), sliceOpacityControl('Z opacity', 'z', .18),
 ]);
 const fieldViewSelector = gui.field('Field view', gui.select({ value: fieldViewMode, on: { change: event => setFieldViewMode(event.target.value) } }, [gui.option('2d', '2D heatmap'), gui.option('3d', '3D slices'), gui.option('both', '2D + 3D')]));
+const gizmosToggle = gui.input({ type: 'checkbox', checked: gizmosEnabled, on: { change: event => { gizmosEnabled = Boolean(event.target.checked); transformGizmo.setEnabled(gizmosEnabled); } } });
+const gizmosControl = gui.field('Gizmos', gizmosToggle, { className: 'check-field' });
 
 const speakerList = gui.stack([], { className: 'speaker-list' });
 const setList = gui.stack([], { className: 'speaker-list set-list' });
@@ -380,6 +453,7 @@ function updateSpeakerCard(speaker) {
 function removeSpeaker(speaker, { refreshEditor = true } = {}) {
   if (!speaker) return false;
   const parentSet = speaker.parentSet;
+  if (transformGizmo.selected === speaker.node) transformGizmo.select(null);
   if (parentSet) parentSet.removeMember(speaker);
   for (const route of crossoverNetwork.routes.values()) route.targets.delete(speaker);
   if (speaker.node) scene.remove(speaker.node);
@@ -427,6 +501,7 @@ function addSpeaker({ position = null, model = null, parentSet = null, localPosi
   const node = new SpeakerNode({ id: `${speaker.id}-node`, name: speaker.name, position: speaker.position });
   node.model = speaker;
   speaker.node = node;
+  wireSpeakerNodeGizmo(speaker, node);
   node.on('positionChanged', event => {
     if (editorState.set && speaker.parentSet === editorState.set) editorState.set.setMemberPosition(speaker, event.position);
     else if (!speaker.parentSet) speaker.setPosition(event.position);
@@ -455,6 +530,7 @@ function updateSetCard(set) {
 }
 function removeSpeakerSet(set) {
   if (!set) return false;
+  if (transformGizmo.selected === set.node) transformGizmo.select(null);
   for (const route of crossoverNetwork.routes.values()) route.targets.delete(set);
   for (const member of [...set.members]) removeSpeaker(member.speaker, { refreshEditor: false });
   if (set.node) scene.remove(set.node);
@@ -501,6 +577,7 @@ function createSpeakerSet(type = 'generic') {
   node.draggable = true;
   node.model = set;
   set.node = node;
+  wireSpeakerSetGizmo(set, node);
   node.on('positionChanged', event => { if (editorState.set || editorState.room) return; set.setPosition(event.position); updateSetCard(set); invalidateField(); });
   set.on('positionChanged', () => { node.setPosition(set.position, { emit: false }); updateSetCard(set); invalidateField(); });
   set.on('orientationChanged', () => { updateSetCard(set); invalidateField(); });
@@ -648,11 +725,12 @@ function renderSetEditor(set = editorState.set) {
     typeHelperControls(set), commonSetHelperControls(set),
     gui.h('details', { className: 'signal-chain' }, [gui.h('summary', { text: 'Set signal chain' }), buildSignalControls(set.processors)]),
     gui.h('div', { className: 'member-list' }, set.members.map((member, index) => memberEditor(set, member, index))),
-    gui.h('p', { className: 'hint', text: 'Drag members in the 3D preview for local X/Z. Shift+drag changes local Y. Member order, trims, positions and orientations stay local to the set.' }),
+    gui.h('p', { className: 'hint', text: 'Gizmos: click a member to select Position, then click it again to toggle Rotate. Position changes stay member-local; Shift-drag changes local Y.' }),
   ]);
 }
 function openSetEditor(set) {
   if (editorState.set === set || editorState.room) return;
+  transformGizmo.select(null);
   editorState.camera = { position: [...camera.position], target: [...camera.target] };
   editorState.set = set;
   editorState.setHelperState = new SpeakerSetEditorState(set);
@@ -667,6 +745,7 @@ function openSetEditor(set) {
 function closeSetEditor() {
   const set = editorState.set;
   if (!set) return;
+  transformGizmo.select(null);
   set.syncAll();
   editorState.set = null;
   editorState.setHelperState = null;
@@ -743,10 +822,26 @@ function newSetDialogRow() {
   return gui.row([select, gui.button('Add set', { on: { click: () => { const set = createSpeakerSet(select.value); openSetEditor(set); } } })], { className: 'button-row' });
 }
 
-const roomEditor = new RoomEditor({
+roomEditor = new RoomEditor({
   gui, panel: roomEditorPanel, room, scene, camera, canvas, roomOutline, field2DView, field3DView, roomField, dimensions,
-  onOpen: () => { editorState.room = true; mainPanel.hidden = true; setEditorPanel.hidden = true; roomEditorPanel.hidden = false; refreshSceneMode(); },
-  onClose: () => { editorState.room = false; roomEditorPanel.hidden = true; mainPanel.hidden = false; refreshSceneMode(); invalidateField(); },
+  onOpen: () => {
+    editorState.room = true;
+    transformGizmo.select(null);
+    transformGizmo.setEnabled(gizmosEnabled);
+    mainPanel.hidden = true;
+    setEditorPanel.hidden = true;
+    roomEditorPanel.hidden = false;
+    refreshSceneMode();
+  },
+  onClose: () => {
+    editorState.room = false;
+    transformGizmo.select(null);
+    transformGizmo.setEnabled(gizmosEnabled);
+    roomEditorPanel.hidden = true;
+    mainPanel.hidden = false;
+    refreshSceneMode();
+    invalidateField();
+  },
   onChanged: () => {
     acousticRuntime.syncRoom();
     updateRoomSummary();
@@ -754,6 +849,8 @@ const roomEditor = new RoomEditor({
     refreshSceneMode();
   },
 });
+roomEditor.transformGizmo?.destroy();
+roomEditor.transformGizmo = transformGizmo;
 
 frequency.on('selectedFrequencyChanged', state => {
   if (state.selectedHz == null) return;
@@ -773,12 +870,12 @@ gui.mount(mainPanel, [
   gui.h('h2', { text: 'Room' }),
   gui.h('section', { className: 'speaker-card room-card' }, [roomSummary, gui.button('Edit room', { on: { click: () => roomEditor.open() } })]),
   gui.field('Analysis mode', frequencyModeSelect), gui.field('Frequency', singleFrequencyControls), rangeFrequencyControls,
-  fieldViewSelector, sliceControls,
+  fieldViewSelector, gizmosControl, sliceControls,
   gui.h('h2', { text: 'Speaker models' }), customModelCreator(),
   gui.h('h2', { text: 'Speakers' }), standaloneSpeakerControls(), speakerList,
   gui.h('h2', { text: 'Speaker sets' }), newSetDialogRow(), setList,
   gui.h('div', { className: 'speaker-heading' }, [gui.h('h2', { text: 'Crossover routes' }), gui.button('Add route', { on: { click: createCrossoverRoute } })]), crossoverList,
-  gui.h('p', { className: 'hint', text: 'LMB moves standalone speakers or complete sets on XZ. Shift+LMB changes height. RMB orbits. Wheel zooms.' }),
+  gui.h('p', { className: 'hint', text: 'Gizmos: click a standalone speaker or complete set to select Position; click the selected target again to toggle Rotate. Position drag changes XZ and Shift-drag changes Y. RMB orbits. Wheel zooms.' }),
 ]);
 
 const defaultModel = speakerLibrary.get('generic/point-source') ?? speakerLibrary.list()[0];
@@ -790,7 +887,6 @@ globalThis.acousticMateStarted = true;
 
 globalThis.addEventListener('beforeunload', () => {
   roomEditor.destroy?.();
-  drag.destroy();
   orbit.destroy();
   viewport.destroy();
   gui.destroy();
