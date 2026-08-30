@@ -107,3 +107,33 @@ test('attached treatment XYZ update changes solver attachment and snaps presenta
   assert.equal(object.attachment.sillHeight, .85);
   assert.deepEqual(object.geometry.position, [5.95, 1.35, 2.25]);
 });
+
+test('treatment gizmo position uses the same XYZ-to-attachment path as numeric editing', () => {
+  const room = new RectangularRoom({ width: 6, height: 2.7, depth: 4.5 });
+  const object = treatment('absorber-gizmo', 'absorber', new Box({ id: 'absorber-gizmo-geometry' }), 1);
+  room.addAcousticObject(object);
+  const editor = makeEditor(room);
+
+  editor.wireAcousticObjectGizmo(object);
+  object.geometry.gizmoSetPosition([5.95, 1.35, 2.25]);
+
+  assert.equal(object.attachment.wall, 'x-max');
+  assert.equal(object.attachment.offset, 2);
+  assert.equal(object.attachment.sillHeight, .85);
+  assert.deepEqual(object.geometry.position, [5.95, 1.35, 2.25]);
+});
+
+test('treatment gizmo rotation stays presentation-only', () => {
+  const room = new RectangularRoom({ width: 6, height: 2.7, depth: 4.5 });
+  const object = treatment('absorber-rotate', 'absorber', new Box({ id: 'absorber-rotate-geometry' }), 1);
+  room.addAcousticObject(object);
+  const editor = makeEditor(room);
+  const attachment = { ...object.attachment };
+
+  editor.wireAcousticObjectGizmo(object);
+  object.geometry.gizmoSetRotation([.1, .2, .3]);
+
+  assert.deepEqual(object.metadata.presentationRotation, [.1, .2, .3]);
+  assert.deepEqual(object.geometry.rotation, [.1, .2, .3]);
+  assert.deepEqual(object.attachment, attachment);
+});
