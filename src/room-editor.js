@@ -1,4 +1,4 @@
-import { Box, Cylinder } from '../vendor/S3D/s3d.js';
+import { Box, Cylinder, TransformGizmoController } from '../vendor/S3D/s3d.js';
 import { AcousticMaterialProfile, AcousticObject } from './acoustic-object.js';
 import { RoomGeometryWorkflow } from './room-geometry-workflow.js';
 
@@ -76,6 +76,7 @@ class RoomEditor {
     this.room.on('acousticObjectChanged', () => this.applyAcousticObjects());
     this.room.on('acousticObjectRemoved', event => { this.scene.remove(event.object.geometry); this.applyAcousticObjects(); });
     this.bindCanvasInteraction();
+    this.bindTransformGizmo();
     this.applyRoomGeometry();
     this.applyOpenings();
     this.applyAcousticObjects();
@@ -188,6 +189,49 @@ class RoomEditor {
     this.canvas.addEventListener('pointercancel', this.onCanvasPointerUp);
   }
 
+  bindTransformGizmo() {
+    if (!this.canvas) {
+      this.transformGizmo = null;
+      return;
+    }
+    this.transformGizmo = new TransformGizmoController(this.canvas, this.camera, this.scene, {
+      candidates: () => this.acousticObjectGizmoCandidates(),
+      enabled: false,
+      mode: 'position',
+      vertical: true,
+    });
+  }
+
+  acousticObjectGizmoCandidates() {
+    if (!this.visible || this.interactionMode !== 'none') return [];
+    return (this.room.acousticObjects ?? []).map(object => object.geometry).filter(Boolean);
+  }
+
+  wireAcousticObjectGizmo(object) {
+    const geometry = object?.geometry;
+    if (!geometry) return;
+    geometry.selectable = true;
+    geometry.gizmoEnabled = true;
+    geometry.gizmoPickRadius = Math.max(.2, Math.min(1.2, Math.hypot(...geometry.scale)));
+    geometry.gizmoGetPosition = () => [...geometry.position];
+    geometry.gizmoSetPosition = value => {
+      if (object.attachment) {
+        const attachment = this.attachmentFromWorldPosition(object, value);
+        this.room.updateAcousticObject(object, { attachment });
+      } else {
+        geometry.setPosition(value);
+        this.onChanged?.(this.room);
+      }
+      return geometry;
+    };
+    geometry.gizmoGetRotation = () => [...geometry.rotation];
+    geometry.gizmoSetRotation = value => {
+      object.setPresentationRotation(value);
+      this.onChanged?.(this.room);
+      return geometry;
+    };
+  }
+
   interactionThreshold() { return Math.max(.12, Math.min(this.room.dimensions.width, this.room.dimensions.depth) * .05); }
   nearestVertex(point) {
     let best = null;
@@ -223,6 +267,7 @@ class RoomEditor {
     this.interactionMode = mode;
     this.pointerDrag = null;
     if (mode !== 'measure') this.pendingMeasurementAnchor = null;
+    if (mode !== 'none') this.transformGizmo?.select(null);
     if (this.visible) this.render();
     return this;
   }
@@ -280,13 +325,17 @@ class RoomEditor {
     object.geometry.color = [...(TREATMENT_COLORS[object.type] ?? [.65, .65, .65, .75])];
     object.geometry.visible = true;
     object.syncPresentationGeometry?.();
-    if (!object.attachment) return;
+    if (!object.attachment) {
+      this.wireAcousticObjectGizmo(object);
+      return;
+    }
     const rect = this.room.acousticObjectRect(object); if (!rect) return;
     const thickness = Math.max(.02, Number(object.metadata?.thickness ?? .1));
     object.geometry.setPosition(rect.center.map((value, axis) => value + rect.normal[axis] * thickness / 2), { emit: false });
     if (object.geometry.primitive === 'cylinder') { const radius = object.attachment.width / 2; object.geometry.scale = [radius, object.attachment.height / 2, radius]; }
     else if (object.attachment.wall.startsWith('x-')) object.geometry.scale = [thickness / 2, object.attachment.height / 2, object.attachment.width / 2];
     else object.geometry.scale = [object.attachment.width / 2, object.attachment.height / 2, thickness / 2];
+    this.wireAcousticObjectGizmo(object);
   }
   attachmentFromWorldPosition(object, position = object.geometry.position) {
     const attachment = object?.attachment;
@@ -417,7 +466,7 @@ class RoomEditor {
     return new AcousticMaterialProfile({ absorption: [[20, value], [20000, value]] });
   }
   createAcousticGeometry(type, primitive, id) {
-    const options = { id: `${id}-geometry`, color: TREATMENT_COLORS[type], selectable: false, visible: true };
+    const options = { id: `${id}-geometry`, color: TREATMENT_COLORS[type], selectable: true, visible: true };
     if (primitive === 'box') return new Box(options);
     if (primitive === 'cylinder') return new Cylinder({ ...options, segments: 20 });
     throw new Error(`Unsupported acoustic object primitive: ${primitive}`);
@@ -457,6 +506,7 @@ class RoomEditor {
         const scale = [...object.geometry.scale];
         scale[axis] = value;
         object.geometry.scale = scale;
+        this.wireAcousticObjectGizmo(object);
         this.onChanged?.(this.room);
       };
       return this.gui.h('section', { className: 'speaker-card treatment-card' }, [
@@ -506,6 +556,7 @@ class RoomEditor {
       this.dimensionControls(), this.geometryWorkflowControls(),
       this.gui.h('div', { className: 'speaker-heading' }, [this.gui.h('h2', { text: 'Openings' }), this.gui.button('Add opening', { on: { click: () => this.addOpening() } })]), this.gui.h('div', { className: 'member-list' }, this.room.openings.map(opening => this.openingCard(opening))),
       this.gui.h('h2', { text: 'Acoustic objects' }), this.acousticObjectCreateControls(), this.gui.h('div', { className: 'member-list' }, (this.room.acousticObjects ?? []).map(object => this.acousticObjectCard(object))),
+      this.gui.h('p', { className: 'hint', text: 'Select a treatment in the 3D view to get the S3D transform gizmo. Drag X/Y/Z handles to move it. Click the selected treatment again to toggle Position and Rotate. Attached objects stay attached and resolve their solver boundary patch from world-space XYZ. Width, height and thickness remain explicit resize controls.' }),
       this.gui.h('p', { className: 'hint', text: 'Openings and attached absorptive or impedance objects affect modal damping. Free-standing objects remain geometry-only for the current rectangular boundary-loss model. Diffusers remain explicit scattering objects; exact scattering is outside the current solver.' }),
     ]);
   }
@@ -517,17 +568,24 @@ class RoomEditor {
     this.cameraSnapshot = { position: [...this.camera.position], target: [...this.camera.target] };
     const { width, height, depth } = this.room.dimensions;
     this.camera.position = [width * 1.15, height * 1.65, depth * 1.35]; this.camera.target = [width / 2, height / 2, depth / 2];
-    this.panel.hidden = false; this.setMarkerVisibility(true); this.onOpen?.(); this.render(); return this;
+    this.panel.hidden = false; this.setMarkerVisibility(true); this.transformGizmo?.setEnabled(true); this.onOpen?.(); this.render(); return this;
   }
   finishClose() {
-    this.visible = false; this.setInteractionMode('none'); this.panel.hidden = true; this.setMarkerVisibility(false);
+    this.visible = false; this.setInteractionMode('none'); this.transformGizmo?.setEnabled(false); this.panel.hidden = true; this.setMarkerVisibility(false);
     if (this.cameraSnapshot) { this.camera.position = [...this.cameraSnapshot.position]; this.camera.target = [...this.cameraSnapshot.target]; }
     this.cameraSnapshot = null; this.onClose?.(); return this;
   }
   commit() { if (!this.visible) return this; this.transactionSnapshot = null; this.geometryStatus = 'Room changes committed.'; return this.finishClose(); }
   cancel() { if (!this.visible) return this; const snapshot = this.transactionSnapshot; this.transactionSnapshot = null; if (snapshot) this.restoreTransaction(snapshot); return this.finishClose(); }
   close() { return this.commit(); }
-  destroy() { if (!this.canvas) return; this.canvas.removeEventListener('pointerdown', this.onCanvasPointerDown); this.canvas.removeEventListener('pointermove', this.onCanvasPointerMove); this.canvas.removeEventListener('pointerup', this.onCanvasPointerUp); this.canvas.removeEventListener('pointercancel', this.onCanvasPointerUp); }
+  destroy() {
+    this.transformGizmo?.destroy();
+    if (!this.canvas) return;
+    this.canvas.removeEventListener('pointerdown', this.onCanvasPointerDown);
+    this.canvas.removeEventListener('pointermove', this.onCanvasPointerMove);
+    this.canvas.removeEventListener('pointerup', this.onCanvasPointerUp);
+    this.canvas.removeEventListener('pointercancel', this.onCanvasPointerUp);
+  }
 }
 
 export { RoomEditor, floorPoint };
